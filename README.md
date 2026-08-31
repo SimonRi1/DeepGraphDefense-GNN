@@ -22,6 +22,7 @@ Graph Neural Networks and Other Machine Learning Techniques for Malware Analysis
 
 ## Project structure
 thesis-project/
+├── orchestrator.py           # entrypoint for all the functionality
 ├── data/
 │   ├── raw/                  # dataset
 │   ├── processed/            # extracted feature

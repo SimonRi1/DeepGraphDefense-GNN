@@ -12,7 +12,6 @@ class ExperimentLogger:
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.metrics_log = []
 
-        # Salva subito la configurazione
         with open(self.run_dir / "config.json", "w") as f:
             json.dump(config, f, indent=2)
 
@@ -21,12 +20,15 @@ class ExperimentLogger:
     def log_epoch(self, epoch: int, metrics: dict):
         entry = {"epoch": epoch, **metrics}
         self.metrics_log.append(entry)
+        
+        path = self.run_dir / "metrics.csv"
+        write_header = not path.exists()
 
-        # write on the disk every epoch
-        with open(self.run_dir / "metrics.csv", "w", newline="") as f:
+        with open(path, "a", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=entry.keys())
-            writer.writeheader()
-            writer.writerows(self.metrics_log)
+            if write_header:
+                writer.writeheader()
+            writer.writerow(entry)
 
     def log_concept_drift(self, month: str, metrics: dict):
         """Record the performance degradation every month"""
