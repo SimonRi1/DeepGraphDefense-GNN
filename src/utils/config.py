@@ -9,7 +9,7 @@ CONFIG = {
     "num_features": 100,          # top N feature per information gain
 
     # Graph construction
-    "feature_names": [            # le 9 feature di MFGraph
+    "feature_names": [            # 9 features of MFGraph
         "general", "header", "imported", "exported",
         "section", "byte_histogram", "byte_entropy",
         "data_directories", "string"
@@ -28,5 +28,5 @@ CONFIG = {
     "hidden_dim": 128,
     "num_layers": 3,
     "dropout_rate": 0.5,
-    "num_classes": 2,             # benigno / maligno
+    "num_classes": 2,             # Benign / Malware
     }
