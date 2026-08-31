@@ -2,6 +2,19 @@
 Graph Neural Networks and Other Machine Learning Techniques for Malware Analysis and the Implementation of a NIDS
 
 ## Table of Contents
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Part 1: ]
+- [Part 2: ]
+- [Dataset](#dataset)
+- [Performance](#performance)
+- [Limitations and Known Issues](#limitations-and-known-issues)
+- [Deployment](#deployment)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Overview
 
@@ -12,11 +25,13 @@ thesis-project/
 ├── data/
 │   ├── raw/                  # dataset
 │   ├── processed/            # extracted feature
-│   └── graphs/               # builded graphs (.pt o .json)
+│   ├── graphs/               # builded graphs (.pt o .json)
+│   └── test_samples          # .exe files for test the extraction of the features
+│   
 │
 ├── src/
 │   ├── features/
-│   │   ├── pe_extractor.py   # LIEF → 9 static feature (MFGraph)
+│   │   ├── pe_extractor.py   # LIEF → 2 Classes: 9 static features (MFGraph) from new and same 9 features from ember dataset
 │   │   └── flow_extractor.py # pcap/csv → flow features (GNN-NIDS)
 │   │
 │   ├── graph/
@@ -44,4 +59,10 @@ thesis-project/
 │   └── 03_results_analysis.ipynb
 │
 ├── experiments/              # output: saved models, log, plot
-└── tests/                    # modules unit test
+├── tests/                    # modules unit test
+└── envs/                     # environment for the requirements installation
+
+## Dataset
+
+## License
+This project is licensed under the MIT License. See `LICENSE` file for details.

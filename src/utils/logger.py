@@ -22,14 +22,14 @@ class ExperimentLogger:
         entry = {"epoch": epoch, **metrics}
         self.metrics_log.append(entry)
 
-        # Scrivi su disco ad ogni epoch (sicuro se il processo crasha)
+        # write on the disk every epoch
         with open(self.run_dir / "metrics.csv", "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=entry.keys())
             writer.writeheader()
             writer.writerows(self.metrics_log)
 
     def log_concept_drift(self, month: str, metrics: dict):
-        """Traccia il degrado delle performance mese per mese."""
+        """Record the performance degradation every month"""
         entry = {"month": month, **metrics}
         path = self.run_dir / "concept_drift.csv"
         write_header = not path.exists()
