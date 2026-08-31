@@ -69,7 +69,6 @@ class PEFeatureExtractor:
         if not dll_counts:
             return np.zeros(10, dtype=np.float32)
         arr = np.array(dll_counts[:10], dtype=np.float32)
-        # Pad a lunghezza fissa
         return np.pad(arr, (0, max(0, 10 - len(arr))))
 
     def _extract_exported(self, binary) -> np.ndarray:
@@ -240,8 +239,8 @@ class EmberFeatureParser:
         return np.array([
             s.get("numstrings", 0),
             s.get("avlength", 0.0),
-            0.0,  # Missing std deviation
-            0.0,  # Missing max length
+            0.0,                # Missing std deviation
+            0.0,                # Missing max length
             s.get("paths", 0),
             s.get("urls", 0),
         ], dtype=np.float32)
