@@ -1,3 +1,9 @@
+import sys
+from pathlib import Path
+project_root = Path(__file__).resolve().parent.parent
+sys.path.append(str(project_root))
+
+from src.utils.config import CONFIG
 import torch
 import numpy as np
 import networkx as nx
@@ -43,11 +49,7 @@ class FeatureGraphBuilder:
         features: a dictionary with keys corresponding to CONFIG["feature_names"]
         label: 0=benign, 1=malignant, -1=unlabelled
         """
-        feature_order = [
-            "general", "header", "imported", "exported",
-            "section", "byte_histogram", "byte_entropy",
-            "data_directories", "string"
-        ]
+        feature_order = CONFIG["feature_names"]
         node_features = []
         for name in feature_order:
             vec = features[name]
@@ -73,11 +75,7 @@ class FeatureGraphBuilder:
         Converts to a NetworkX graph for visualisation
         """
         G = nx.Graph()
-        names = feature_names or [
-            "general", "header", "imported", "exported",
-            "section", "byte_hist", "byte_entropy",
-            "data_dir", "string"
-        ]
+        names = feature_names or CONFIG["feature_names"]
         for i, name in enumerate(names):
             G.add_node(i, label=name)
 
