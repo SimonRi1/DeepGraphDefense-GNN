@@ -5,8 +5,7 @@ from pathlib import Path
 
 
 class ExperimentLogger:
-    def __init__(self, experiment_name: str, config: dict,
-                 base_dir: str = "experiments"):
+    def __init__(self, experiment_name: str, config: dict, base_dir: str = "experiments"):
         self.run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.run_dir = Path(base_dir) / experiment_name / self.run_id
         self.run_dir.mkdir(parents=True, exist_ok=True)
