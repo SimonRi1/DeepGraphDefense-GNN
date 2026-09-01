@@ -21,6 +21,7 @@ Graph Neural Networks and Other Machine Learning Techniques for Malware Analysis
 ## Architecture
 
 ## Project structure
+```
 thesis-project/
 ├── orchestrator.py           # entrypoint for all the functionality
 ├── data/
@@ -62,6 +63,7 @@ thesis-project/
 ├── experiments/              # output: saved models, log, plot
 ├── tests/                    # modules unit test
 └── envs/                     # environment for the requirements installation
+```
 
 ## Dataset
 
