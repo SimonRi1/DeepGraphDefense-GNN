@@ -1,4 +1,13 @@
 from __future__ import annotations
+import sys
+from pathlib import Path
+project_root = Path(__file__).resolve().parent.parent
+sys.path.append(str(project_root))
+
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
+
+from src.utils.config import CONFIG
 import lief
 import numpy as np
 from pathlib import Path
@@ -67,9 +76,9 @@ class PEFeatureExtractor:
         imports = list(binary.imports)
         dll_counts = [len(list(imp.entries)) for imp in imports]
         if not dll_counts:
-            return np.zeros(10, dtype=np.float32)
-        arr = np.array(dll_counts[:10], dtype=np.float32)
-        return np.pad(arr, (0, max(0, 10 - len(arr))))
+            return np.zeros(CONFIG["imported_dim"], dtype=np.float32)
+        arr = np.array(dll_counts[:CONFIG["imported_dim"]], dtype=np.float32)
+        return np.pad(arr, (0, max(0, CONFIG["imported_dim"] - len(arr))))
 
     def _extract_exported(self, binary) -> np.ndarray:
         exports = list(binary.exported_functions)
@@ -78,16 +87,16 @@ class PEFeatureExtractor:
     def _extract_section(self, binary) -> np.ndarray:
         sections = list(binary.sections)
         if not sections:
-            return np.zeros(10, dtype=np.float32)
+            return np.zeros(CONFIG["section_dim"], dtype=np.float32)
         features = []
-        for sec in sections[:5]:  # max 5 sezioni
+        for sec in sections[:CONFIG["section_max"]]:  # max 5 section
             features.extend([
                 sec.virtual_size,
                 sec.size,
                 sec.entropy,
             ])
         arr = np.array(features, dtype=np.float32)
-        return np.pad(arr, (0, max(0, 15 - len(arr))))
+        return np.pad(arr, (0, max(0, CONFIG["section_dim"] - len(arr))))
 
     def _extract_byte_histogram(self, pe_path: str) -> np.ndarray:
         """Distribution of the 256 byte values in the file."""
@@ -109,17 +118,17 @@ class PEFeatureExtractor:
             entropy = -np.sum(probs[probs > 0] * np.log2(probs[probs > 0]))
             entropies.append(entropy)
         if not entropies:
-            return np.zeros(256, dtype=np.float32)
-        arr = np.array(entropies[:256], dtype=np.float32)
-        return np.pad(arr, (0, max(0, 256 - len(arr))))
+            return np.zeros(CONFIG["entropy_dim"], dtype=np.float32)
+        arr = np.array(entropies[:CONFIG["entropy_dim"]], dtype=np.float32)
+        return np.pad(arr, (0, max(0, CONFIG["entropy_dim"] - len(arr))))
 
     def _extract_data_directories(self, binary) -> np.ndarray:
         dirs = list(binary.data_directories)
         features = []
-        for d in dirs[:16]:  # 16 data directories standard PE
+        for d in dirs[:CONFIG["datadirs_max"]]:  # 16 data directories standard PE
             features.extend([d.rva, d.size])
         arr = np.array(features, dtype=np.float32)
-        return np.pad(arr, (0, max(0, 32 - len(arr))))
+        return np.pad(arr, (0, max(0, CONFIG["datadirs_dim"] - len(arr))))
 
     def _extract_string(self, pe_path: str, min_len: int = 4) -> np.ndarray:
         """Statistics on ASCII strings in the file."""
@@ -135,7 +144,7 @@ class PEFeatureExtractor:
                     strings.append(''.join(current))
                 current = []
         if not strings:
-            return np.zeros(6, dtype=np.float32)
+            return np.zeros(CONFIG["string_dim"], dtype=np.float32)
         lengths = [len(s) for s in strings]
         return np.array([
             len(strings),                    # Strings total number
@@ -203,9 +212,9 @@ class EmberFeatureParser:
         # EMBER saves imports as {"dll_name": ["func1", "func2"]}
         dll_counts = [len(funcs) for dll, funcs in imp.items()]
         if not dll_counts:
-            return np.zeros(10, dtype=np.float32)
-        arr = np.array(dll_counts[:10], dtype=np.float32)
-        return np.pad(arr, (0, max(0, 10 - len(arr))))
+            return np.zeros(CONFIG["imported_dim"], dtype=np.float32)
+        arr = np.array(dll_counts[:CONFIG["imported_dim"]], dtype=np.float32)
+        return np.pad(arr, (0, max(0, CONFIG["imported_dim"] - len(arr))))
 
     def _parse_exported(self, exp: list) -> np.ndarray:
         # EMBER saves exports as a list of strings
@@ -215,23 +224,23 @@ class EmberFeatureParser:
         # EMBER section features are within a nested list
         sections = sec.get("sections", [])
         if not sections:
-            return np.zeros(15, dtype=np.float32)
+            return np.zeros(CONFIG["section_dim"], dtype=np.float32)
         features = []
-        for s in sections[:5]:
+        for s in sections[:CONFIG["section_max"]]:
             features.extend([
                 s.get("vsize", 0),
                 s.get("size", 0),
                 s.get("entropy", 0.0),
             ])
         arr = np.array(features, dtype=np.float32)
-        return np.pad(arr, (0, max(0, 15 - len(arr))))
+        return np.pad(arr, (0, max(0, CONFIG["section_dim"] - len(arr))))
 
     def _parse_datadirs(self, dirs: list) -> np.ndarray:
         features = []
-        for d in dirs[:16]:
+        for d in dirs[:CONFIG["datadirs_max"]]:
             features.extend([d.get("virtual_address", 0), d.get("size", 0)])
         arr = np.array(features, dtype=np.float32)
-        return np.pad(arr, (0, max(0, 32 - len(arr))))
+        return np.pad(arr, (0, max(0, CONFIG["datadirs_dim"] - len(arr))))
 
     def _parse_strings(self, s: dict) -> np.ndarray:
         # Note: EMBER JSON does not contain max length or standard deviation. 

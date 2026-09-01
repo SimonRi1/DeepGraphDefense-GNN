@@ -6,6 +6,7 @@ sys.path.append(str(project_root))
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
+from src.utils.config import CONFIG
 from src.features.pe_extractor import PEFeatureExtractor
 from src.graph.feature_graph import FeatureGraphBuilder
 from src.utils.logger import ExperimentLogger

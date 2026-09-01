@@ -3,7 +3,7 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(project_root))
 
-
+from src.utils.config import CONFIG
 import numpy as np
 import torch
 
@@ -30,7 +30,7 @@ def test_graph_construction():
 
     # 2. Verify that the padding worked
     # We expect 9 nodes, each of length 256 (dimension of byte_histogram)
-    expected_shape = (9, 256)
+    expected_shape = (9, CONFIG["byte_histogram_dim"])
     
     print("\n--- GRAPH RESULTS ---")
     print(f"Nodes (x) shape: {data.x.shape}")

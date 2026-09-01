@@ -1,19 +1,33 @@
 CONFIG = {
     # Paths
     "ember_path": "data/raw/ember2018",
+    "PEsamples_path": "data/raw/test_samples",
     "processed_path": "data/processed",
     "graphs_path": "data/graphs",
     "experiments_path": "experiments",
 
     # Feature selection
-    "num_features": 100,          # top N feature per information gain
+    "num_features": 100,
 
     # Graph construction
-    "feature_names": [            # 9 features of MFGraph
+    "feature_names": [
         "general", "header", "imported", "exported",
         "section", "byte_histogram", "byte_entropy",
         "data_directories", "string"
     ],
+
+    # Feature dimensions (fixed vector size per node)
+    "general_dim":    10,
+    "header_dim":     10,
+    "imported_dim":   10,   # max DLLs considered
+    "exported_dim":   1,
+    "section_max":    5,    # max sections considered
+    "section_dim":    15,   # section_max * 3 values
+    "entropy_dim":    256,
+    "datadirs_max":   16,
+    "datadirs_dim":   32,   # datadirs_max * 2 values
+    "string_dim":     6,
+    "byte_histogram_dim": 256,
 
     # Training
     "batch_size": 256,
@@ -28,5 +42,5 @@ CONFIG = {
     "hidden_dim": 128,
     "num_layers": 3,
     "dropout_rate": 0.5,
-    "num_classes": 2,             # Benign / Malware
+    "num_classes": 2,
     }
