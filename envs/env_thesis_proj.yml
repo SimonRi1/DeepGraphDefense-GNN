@@ -15,7 +15,6 @@ dependencies:
   - pip
   - py-lief
   - scikit-learn
-  - tqdm
 
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cpu
