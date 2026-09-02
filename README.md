@@ -55,6 +55,16 @@ thesis-project/
 │       ├── logger.py         # tracking logs (wandb/csv)
 │       └── config.py         # hyperparameters
 │
+├── baseline                   # comparison modules
+│   ├── mlp/
+│   │   ├── dataset.py        # logic to load flat vectors (without building graphs)
+│   │   ├── model.py          # standard MLP neural network (Dense layers only)
+│   │   └── train_mlp.py      # specific training script for the MLP
+│   │
+│   ├── lightgbm/             # gradient Boosting (Lower bound)
+│   │
+│   └── random_forest/        # traditional tree model
+│
 ├── notebooks/
 │   ├── 01_data_exploration.ipynb
 │   ├── 02_graph_visualization.ipynb
@@ -66,6 +76,10 @@ thesis-project/
 ```
 
 ## Dataset
+### Ember
+
+### CIC-IDS2017
+
 
 ## License
 This project is licensed under the MIT License. See `LICENSE` file for details.
