@@ -56,7 +56,7 @@ def train_baseline_mlp():
         model.train()
         train_loss = 0.0
         
-        for features, labels in train_loader:
+        for features, labels in tqdm(train_loader, desc=f"Epoch {epoch:02d} [Train]"):
             features, labels = features.to(device), labels.to(device)
             
             optimizer.zero_grad()
@@ -76,7 +76,7 @@ def train_baseline_mlp():
         all_preds, all_labels = [], []
         
         with torch.no_grad():
-            for features, labels in test_loader:
+            for features, labels in tqdm(train_loader, desc=f"Epoch {epoch:02d} [Test]"):
                 features, labels = features.to(device), labels.to(device)
                 
                 outputs = model(features)
