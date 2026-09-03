@@ -29,18 +29,32 @@ CONFIG = {
     "string_dim":     6,
     "byte_histogram_dim": 256,
 
-    # Training
-    "batch_size": 256,
-    "learning_rate": 0.002,
-    "num_epochs": 50,
+    # Global Training (Default)
     "train_split": 0.8,
     "val_split": 0.1,
     "test_split": 0.1,
     "random_seed": 42,
 
-    # GNN
-    "hidden_dim": 128,
-    "num_layers": 3,
-    "dropout_rate": 0.5,
-    "num_classes": 2,
+    # --- MODEL SPECIFIC CONFIGURATIONS ---
+
+    # GNN Parameters
+    "gnn": {
+        "batch_size": 256,
+        "learning_rate": 0.002,
+        "num_epochs": 50,
+        "hidden_dim": 128,
+        "num_layers": 3,
+        "dropout_rate": 0.5,
+        "num_classes": 2,
+    },
+
+    # MLP Baseline Parameters
+    "mlp": {
+        "input_dim": 2381,       # EMBER flat feature size
+        "batch_size": 2048,      # Large batch for fast tabular training
+        "learning_rate": 0.001,
+        "num_epochs": 20,        # MLPs converge much faster than GNNs
+        "hidden_dims": [1024, 512, 256],
+        "dropout_rate": 0.3,
+    }
     }
