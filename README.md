@@ -55,7 +55,7 @@ thesis-project/
 │       ├── logger.py         # tracking logs (wandb/csv)
 │       └── config.py         # hyperparameters
 │
-├── baseline                   # comparison modules
+├── baselines                   # comparison modules
 │   ├── mlp/
 │   │   ├── dataset.py        # logic to load flat vectors (without building graphs)
 │   │   ├── model.py          # standard MLP neural network (Dense layers only)
