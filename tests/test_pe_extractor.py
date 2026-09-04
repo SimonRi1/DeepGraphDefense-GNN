@@ -30,7 +30,8 @@ def run_test():
         return
     else:
 	    for name, vec in pe_features.items():   # Print the extracted feature
-	        print(f"{name:20s}: shape={vec.shape}, " f"min={vec.min():.3f}, max={vec.max():.3f}")
+	        print(f"{name:20s}: shape={vec.shape}, "
+                  f"min={vec.min():.3f}, max={vec.max():.3f}")
 
     # 2. Test parsing from a real EMBER row (replace with the path to your jsonl)
     jsonl_path = CONFIG["ember_path"]+ember_file
@@ -40,7 +41,8 @@ def run_test():
             first_line = json.loads(f.readline()) # Reads only the first malware
         ember_features = ember_parser.parse(first_line)
         for name, vec in ember_features.items():
-            print(f"{name:20s}: shape={vec.shape}, " f"min={vec.min():.3f}, max={vec.max():.3f}")
+            print(f"{name:20s}: shape={vec.shape}, "
+                  f"min={vec.min():.3f}, max={vec.max():.3f}")
         
     except FileNotFoundError:
         print("Error: JSONL file not found. Check the path.")
