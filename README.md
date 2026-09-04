@@ -55,13 +55,14 @@ thesis-project/
 │       ├── logger.py         # tracking logs (wandb/csv)
 │       └── config.py         # hyperparameters
 │
-├── baselines                   # comparison modules
+├── baselines                 # comparison models
 │   ├── mlp/
 │   │   ├── dataset.py        # logic to load flat vectors (without building graphs)
 │   │   ├── model.py          # standard MLP neural network (Dense layers only)
 │   │   └── train_mlp.py      # specific training script for the MLP
 │   │
 │   ├── lightgbm/             # gradient Boosting (Lower bound)
+│   │   └── train_lgbm.py     # specific training script for the lightgbm
 │   │
 │   └── random_forest/        # traditional tree model
 │
