@@ -56,5 +56,14 @@ CONFIG = {
         "num_epochs": 20,        # MLPs converge much faster than GNNs
         "hidden_dims": [1024, 512, 256],
         "dropout_rate": 0.3,
+    },
+
+    # LightGBM Baseline Parameters
+    "lgbm": {
+        "n_estimators": 1000,    # Number of trees (EMBER paper uses 1000-2000)
+        "learning_rate": 0.05,
+        "num_leaves": 31,
+        "objective": "binary",
     }
+
     }
