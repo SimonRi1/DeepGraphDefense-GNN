@@ -12,7 +12,7 @@ from src.utils.config import CONFIG
 from src.features.pe_extractor import PEFeatureExtractor
 from src.graph.feature_graph import FeatureGraphBuilder
 from baselines.mlp.train_mlp import train_baseline_mlp
-from baselines.lightgmb.train_lgbm import train_baseline_lgbm
+from baselines.lightgbm.train_lgbm import train_baseline_lgbm
 # from src.models.gnn import MyGraphNeuralNetwork 
 
 def run_pe_extraction():
@@ -66,6 +66,11 @@ def main():
     elif args.task == "train_lgbm":
         print("\n--- Starting Baseline LGBM Training ---")
         train_baseline_lgbm()
+
+    elif args.task == "compare_models":
+        print("\n--- Starting models compare ---")
+        #model_compare()
+        pass
         
     elif args.task == "train_gnn":
         print("\n--- [Placeholder] Starting GNN Training ---")
