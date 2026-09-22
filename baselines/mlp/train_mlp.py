@@ -9,7 +9,7 @@ from sklearn.metrics import roc_auc_score, f1_score, accuracy_score, precision_s
 from tqdm import tqdm       # for progress bar to avoid terminal freezing
 
 # Ensure the project root is in the Python path to allow absolute imports
-project_root = Path(__file__).resolve().parent
+project_root = Path(__file__).resolve().parents[0]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
