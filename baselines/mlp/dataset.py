@@ -17,7 +17,7 @@ class EmberFlatDataset(Dataset):
         super().__init__()
         self.data_dir = Path(data_dir)
         self.split = split
-        
+
         # EMBER 2018 dataset dimensions
         FEATURE_DIM = 2381
         TRAIN_SAMPLES = 800000
@@ -50,7 +50,7 @@ class EmberFlatDataset(Dataset):
         # 3. Apply the mask and load only the filtered data into memory
         self.X = X[mask]
         self.y = y[mask]
-        
+
         # Quick statistics
         num_benign = (self.y == 0).sum()
         num_malware = (self.y == 1).sum()

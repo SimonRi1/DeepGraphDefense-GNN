@@ -15,7 +15,8 @@ class BaselineMLP(nn.Module):
         """
         super().__init__()
         
-        layers = []
+        # Data Nomralitation
+        layers = [nn.BatchNorm1d(input_dim)]
         current_dim = input_dim
         
         for h_dim in hidden_dims:
