@@ -45,6 +45,9 @@ thesis-project/
 │   │   ├── gan.py            # Generator + Discriminator (Dropout-GAN)
 │   │   └── classifier.py     # final MLP
 │   │
+│   ├── plots/
+│   │   └── plot_metrics.py   # visualitation fof AUC and loss from all the baseline models
+│   │
 │   ├── training/
 │   │   ├── train_gan.py      # phase 1: train the GAN
 │   │   ├── train_gnn.py      # phase 2: train the GNN
