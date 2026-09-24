@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from sklearn.metrics import roc_auc_score, f1_score, accuracy_score, precision_score, recall_score
-from tqdm import tqdm       # for progress bar to avoid terminal freezing
+from tqdm import tqdm
 
 # Ensure the project root is in the Python path to allow absolute imports
 project_root = Path(__file__).resolve().parents[0]
@@ -29,7 +29,6 @@ def train_baseline_mlp():
     # 2. Load Data
     # Resolves to thesis-project/data/raw/ember2018 using the config path
     data_dir = CONFIG["ember_path"]
-    
     train_dataset = EmberFlatDataset(data_dir=str(data_dir), split="train")
     test_dataset = EmberFlatDataset(data_dir=str(data_dir), split="test")
 
@@ -76,7 +75,7 @@ def train_baseline_mlp():
         all_preds, all_labels = [], []
         
         with torch.no_grad():
-            for features, labels in tqdm(train_loader, desc=f"Epoch {epoch:02d} [Test]"):
+            for features, labels in tqdm(test_loader, desc=f"Epoch {epoch:02d} [Test]"):
                 features, labels = features.to(device), labels.to(device)
                 
                 outputs = model(features)
