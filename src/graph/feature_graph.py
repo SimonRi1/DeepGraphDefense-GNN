@@ -1,3 +1,8 @@
+import torch
+import numpy as np
+import networkx as nx
+from torch_geometric.data import Data
+
 import sys
 from pathlib import Path
 
@@ -6,10 +11,6 @@ if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 from src.utils.config import CONFIG
-import torch
-import numpy as np
-import networkx as nx
-from torch_geometric.data import Data
 
 # Topology from Fig 2 of the paper
 # Follow the config's file order for the features
