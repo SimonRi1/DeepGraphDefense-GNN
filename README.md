@@ -37,7 +37,8 @@ thesis-project/
 │   │   └── flow_extractor.py # pcap/csv → flow features (GNN-NIDS)
 │   │
 │   ├── graph/
-│   │   ├── feature_graph.py  # build the feature graph (MFGraph)
+│   │   ├── feature_graph.py  # build the feature graph from new exe samples(MFGraph)
+│   │   ├── ember_graph.py    # build the feature graph from ember dataset to train the model
 │   │   └── host_graph.py     # build host-connection graph (NIDS)
 │   │
 │   ├── models/
@@ -45,13 +46,13 @@ thesis-project/
 │   │   ├── gan.py            # Generator + Discriminator (Dropout-GAN)
 │   │   └── classifier.py     # final MLP
 │   │
-│   ├── plots/
-│   │   └── plot_metrics.py   # visualitation fof AUC and loss from all the baseline models
-│   │
 │   ├── training/
 │   │   ├── train_gan.py      # phase 1: train the GAN
 │   │   ├── train_gnn.py      # phase 2: train the GNN
 │   │   └── evaluate.py       # metrics + concept drift eval
+│   │
+│   ├── plots/
+│   │   └── plot_metrics.py   # visualitation fof AUC and loss from all the baseline models
 │   │
 │   └── utils/
 │       ├── metrics.py        # AUC, F1, impact mitigation
