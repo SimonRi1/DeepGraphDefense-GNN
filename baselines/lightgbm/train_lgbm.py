@@ -14,6 +14,9 @@ from baselines.mlp.dataset import EmberFlatDataset
 from src.utils.logger import ExperimentLogger
 from src.utils.config import CONFIG
 
+# Extract LightGBM specific parameters from config
+lgbm_config = CONFIG["lgbm"]
+
 def custom_eval_metrics(y_true, y_pred):
     # Convert LightGBM's continuous probabilities into binary 0/1 predictions
     y_bin = (y_pred > 0.5).astype(int)
@@ -43,16 +46,13 @@ def train_baseline_lgbm():
     X_train, y_train = train_dataset.X, train_dataset.y
     X_test, y_test = test_dataset.X, test_dataset.y
 
-    # Extract LightGBM specific parameters from config
-    lgbm_config = CONFIG["lgbm"]
-
     # 3. Initialize Model
     model = lgb.LGBMClassifier(
         n_estimators=lgbm_config["n_estimators"],
         learning_rate=lgbm_config["learning_rate"],
         num_leaves=lgbm_config["num_leaves"],
         objective=lgbm_config["objective"],
-        random_state=CONFIG.get("random_seed", 42),
+        random_state=CONFIG["random_seed"],
         n_jobs=-1,  # -1 means use all available CPU cores
         verbose=-1,  # Add this line to silence the C++ backend for status bar
     )
@@ -72,9 +72,6 @@ def train_baseline_lgbm():
     # Train the model, passing our custom callback and silencing default text spam
     model.fit(
         X_train, y_train,
-        # 1. Use eval_X and eval_y instead of eval_set to fix the deprecation warning
-        #eval_X=[X_train, X_test],
-        #eval_y=[y_train, y_test], 
         eval_set=[(X_train, y_train), (X_test, y_test)], 
         eval_names=['train', 'test'],
         # 2. Add the custom_eval_metrics function to the list
@@ -95,8 +92,8 @@ def train_baseline_lgbm():
     num_trees = len(results['train']['binary_logloss'])
 
     # Define how many points you want on your graph (matching the MLP epochs for compare)
-    target_points = 20
-    step_size = num_trees // target_points  # E.g., 1000 // 20 = 50
+    target_points = CONFIG["mlp"]["num_epochs"]  # 20 points for comparison with MLP
+    step_size = num_trees // target_points
 
     for step in range(1, target_points + 1):
         i = (step * step_size) - 1

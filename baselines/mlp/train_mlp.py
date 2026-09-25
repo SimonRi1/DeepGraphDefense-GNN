@@ -18,6 +18,9 @@ from baselines.mlp.model import BaselineMLP
 from src.utils.logger import ExperimentLogger
 from src.utils.config import CONFIG
 
+# Extract MLP specific parameters from config
+mlp_config = CONFIG["mlp"]
+
 def train_baseline_mlp():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -31,9 +34,6 @@ def train_baseline_mlp():
     data_dir = CONFIG["ember_path"]
     train_dataset = EmberFlatDataset(data_dir=str(data_dir), split="train")
     test_dataset = EmberFlatDataset(data_dir=str(data_dir), split="test")
-
-    # Extract MLP specific parameters from config
-    mlp_config = CONFIG["mlp"]
 
     # num_workers=4 speeds up data loading from disk
     train_loader = DataLoader(train_dataset, batch_size=mlp_config["batch_size"], shuffle=True, num_workers=4)
