@@ -66,4 +66,4 @@ CONFIG = {
         "objective": "binary",
     }
 
-    }
+}
