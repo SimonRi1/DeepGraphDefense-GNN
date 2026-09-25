@@ -12,7 +12,7 @@ PyLibs
 *.msi
 *.zip
 *.7z
-data/raw/
+data/
 
 # Exclude default and custom temporary directories
 Backup_*
