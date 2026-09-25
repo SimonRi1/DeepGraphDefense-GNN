@@ -1,4 +1,7 @@
-from __future__ import annotations
+import lief
+import numpy as np
+from pathlib import Path
+
 import sys
 from pathlib import Path
 
@@ -7,10 +10,6 @@ if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 from src.utils.config import CONFIG
-import lief
-import numpy as np
-from pathlib import Path
-
 
 class PEFeatureExtractor:
     """
