@@ -16,6 +16,7 @@ dependencies:
   - pip
   - py-lief
   - lightgbm
+  - tabulate
 
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cpu
