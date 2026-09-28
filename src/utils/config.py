@@ -46,6 +46,7 @@ CONFIG = {
         "num_layers": 3,
         "dropout_rate": 0.5,
         "num_classes": 2,
+        "k": 50
     },
 
     # MLP Baseline Parameters
