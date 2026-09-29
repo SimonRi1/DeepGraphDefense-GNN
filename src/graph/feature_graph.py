@@ -62,17 +62,20 @@ class FeatureGraphBuilder:
             node_features.append(torch.tensor(vec, dtype=torch.float32))
 
         # Uniform-length padding (the longest node determines the dimension)
-        GLOBAL_MAX_LEN = CONFIG["max_feature_len"]
-        for v in node_features:
-            current_len = v.shape[0]
-            if current_len < GLOBAL_MAX_LEN:
-                v = torch.nn.functional.pad(v, (0, GLOBAL_MAX_LEN - v.shape[0]))
-            else:
-                v = v[:GLOBAL_MAX_LEN]  # truncate if longer than max length
-
+        GLOBAL_MAX_LEN = CONFIG.get("max_feature_len", 2381) # Fallback if not in config
         
+        for i in range(len(node_features)):
+            current_len = node_features[i].shape[0]
+            if current_len < GLOBAL_MAX_LEN:
+                # Pad with zeros up to GLOBAL_MAX_LEN
+                node_features[i] = torch.nn.functional.pad(node_features[i], (0, GLOBAL_MAX_LEN - current_len))
+            else:
+                # Truncate if longer than max length
+                node_features[i] = node_features[i][:GLOBAL_MAX_LEN]
+
         x = torch.stack(node_features)  # shape: [9, GLOBAL_MAX_LEN]
-        # Normalizzazione L2 sulle feature di ogni nodo per stabilizzare l'apprendimento
+        
+        # L2 Normalization
         x = torch.nn.functional.normalize(x, p=2.0, dim=-1)
 
         return Data(
