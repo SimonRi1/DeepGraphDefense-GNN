@@ -1,9 +1,9 @@
 import torch
 import json
 from tqdm import tqdm
-
 from pathlib import Path
 import sys
+
 project_root = Path(__file__).resolve().parents[2]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
@@ -14,16 +14,21 @@ from src.features.pe_extractor import EmberFeatureParser
 
 def ember_graph_building():
     """
-    Parses EMBER .jsonl files to build the training graph dataset.
-    This bypasses PE extraction since EMBER provides pre-extracted LIEF features.
+    Parses EMBER .jsonl files to build the training and testing graph datasets.
+    Automatically routes graphs into data/graphs/train and data/graphs/test.
     """
     builder = FeatureGraphBuilder()
     parser = EmberFeatureParser() 
     
-    # Paths configured in your CONFIG dictionary
+    # 1. Base directory setup
     ember_dir = project_root / CONFIG["ember_path"]
     graphs_out_dir = project_root / CONFIG["graphs_path"]
-    graphs_out_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Subdirectories for chronological split
+    train_out_dir = graphs_out_dir / "train"
+    test_out_dir = graphs_out_dir / "test"
+    train_out_dir.mkdir(parents=True, exist_ok=True)
+    test_out_dir.mkdir(parents=True, exist_ok=True)
     
     jsonl_files = list(ember_dir.glob("*.jsonl"))
     if not jsonl_files:
@@ -31,20 +36,22 @@ def ember_graph_building():
         return
         
     for jsonl_file in jsonl_files:
+        # Determine whether the file belongs to train or test
+        is_test_file = "test" in jsonl_file.name.lower()
+        target_dir = test_out_dir if is_test_file else train_out_dir
+        subset_name = "TEST" if is_test_file else "TRAIN"
 
-        # Quickly count the total lines to enable the percentage bar
+        # Count lines for the progress bar
         with open(jsonl_file, 'r') as f:
             total_lines = sum(1 for _ in f)
 
-        # Counters for reporting
         saved_count = 0
         skipped_date = 0
         skipped_unlabeled = 0
 
-        # Read the file line-by-line directly to prevent RAM exhaustion
+        print(f"\nProcessing {jsonl_file.name} [{subset_name}]...")
         with open(jsonl_file, 'r') as f:
-            # tqdm will now show processing speed (graphs/second) instead of a percentage
-            for idx, line in enumerate(tqdm(f, total=total_lines, desc="Building Graphs")):
+            for idx, line in enumerate(tqdm(f, total=total_lines, desc=f"Building {subset_name} Graphs")):
                 try:
                     raw_dict = json.loads(line)
                     
@@ -53,30 +60,32 @@ def ember_graph_building():
                         skipped_unlabeled += 1
                         continue
                     
-                    # I recommend uncommenting this filter. It will instantly skip 
-                    # 90% of the dataset, speeding up your run significantly.
                     appeared = raw_dict.get("appeared", "")
-                    if "2018-01" not in appeared:
-                         skipped_date += 1
-                         continue
+                    
+                    # Date Filtering:
+                    # If replicating the paper's Jan 2018 training set: apply only to train files[cite: 1].
+                    # For the test set (or concept drift evaluation), test files contain later dates (e.g., Nov-Dec 2018).
+                    if not is_test_file:
+                        if "2018-01" not in appeared:
+                            skipped_date += 1
+                            continue
                     
                     features = parser.parse(raw_dict)
                     graph = builder.build(features, label=label)
                     
-                    # Append the loop index (idx) so files never overwrite each other
                     sha256 = raw_dict.get("sha256", f"unknown_{idx}")
-                    out_path = graphs_out_dir / f"{sha256}.pt"
+                    out_path = target_dir / f"{sha256}.pt"
                     
                     torch.save(graph, out_path)
                     saved_count += 1
+                    
                 except Exception as e:
                     tqdm.write(f"Error on line {idx}: {e}")
-                    # Remove the 'break' here so it doesn't stop the whole file on a single bad line
                     continue
 
         print(f"Finished {jsonl_file.name}:")
-        print(f"  -> Saved: {saved_count}")
-        print(f"  -> Skipped (Not Jan 2018): {skipped_date}")
+        print(f"  -> Saved in {target_dir.name}/: {saved_count}")
+        print(f"  -> Skipped (Date Filter): {skipped_date}")
         print(f"  -> Skipped (Unlabeled): {skipped_unlabeled}")
                 
     print("\n--- EMBER Graph Construction Complete ---")
