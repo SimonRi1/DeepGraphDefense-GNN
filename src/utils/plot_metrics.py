@@ -72,7 +72,7 @@ def plot_comparisons(models: list, save_dir: Path, base_exp_dir: Path):
     axes[1].grid(True, linestyle='--', alpha=0.6)
 
     plt.tight_layout()
-    plt.savefig(save_dir, dpi=300)
+    plt.savefig(save_dir / "model_comparison.png", dpi=300)
     print(f"\n[Success] Plots saved successfully in {save_dir}")
     
     plt.show()
