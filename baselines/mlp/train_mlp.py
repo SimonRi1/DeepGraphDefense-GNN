@@ -13,7 +13,7 @@ project_root = Path(__file__).resolve().parents[0]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from baselines.mlp.dataset import EmberFlatDataset
+from src.training.pe_dataset import EmberFlatDataset
 from baselines.mlp.model import BaselineMLP
 from src.utils.logger import ExperimentLogger
 from src.utils.config import CONFIG

@@ -10,7 +10,7 @@ project_root = Path(__file__).resolve().parents[1]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from baselines.mlp.dataset import EmberFlatDataset
+from src.training.pe_dataset import EmberFlatDataset
 from src.utils.logger import ExperimentLogger
 from src.utils.config import CONFIG
 
@@ -38,7 +38,7 @@ def train_baseline_lgbm():
     # Resolves to thesis-project/data/raw/ember2018 using the config path
     data_dir = CONFIG["ember_path"]
     
-    print("Loading datasets into memory (this may take a moment)...")
+    print("\n [Data] Loading dataset into memory...")
     train_dataset = EmberFlatDataset(data_dir=str(data_dir), split="train")
     test_dataset = EmberFlatDataset(data_dir=str(data_dir), split="test")
 
@@ -58,7 +58,7 @@ def train_baseline_lgbm():
     )
 
     # 4. Training Phase
-    print(f"\nStarting LightGBM training for {lgbm_config['n_estimators']} trees...")
+    print(f"\n [Lgbm] Starting LightGBM training for {lgbm_config['n_estimators']} trees...")
     # Create the progress bar
     pbar = tqdm(
         total=lgbm_config["n_estimators"], 
@@ -85,7 +85,7 @@ def train_baseline_lgbm():
     pbar.close()
         
     # 5. Extract and Log Per-Iteration Metrics (This makes the curves)
-    print("\nExtracting per-iteration metrics for graphs...")
+    print("\n [Lgbm] Extracting per-iteration metrics for graphs...")
     results = model.evals_result_
     
     # Loop through every built tree ("epoch") and log its metrics to the CSV
@@ -112,7 +112,7 @@ def train_baseline_lgbm():
 
 
     # 6. Calculate Metrics
-    print("\nEvaluating final model performance...")
+    print("\n [Lgbm] Evaluating final model performance...")
     preds_proba = model.predict_proba(X_test)[:, 1]
     preds_binary = model.predict(X_test)
     metrics = {
