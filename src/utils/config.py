@@ -41,13 +41,15 @@ CONFIG = {
     "gnn": {
         "batch_size": 256,
         "learning_rate": 0.002,
-        "num_epochs": 50,
-        "hidden_dim": 128,
+        "num_epochs": 20,
+        "hidden_dim": 48,
         "num_layers": 3,
         "dropout_rate": 0.5,
-        "num_classes": 2,
-        "k": 50
+        "mlp_hidden_dim": 1024,
+        "k": 28
     },
+    # Max len of the feature vector for each node (for uniform padding)
+    "max_feature_len": 512,
 
     # MLP Baseline Parameters
     "mlp": {
