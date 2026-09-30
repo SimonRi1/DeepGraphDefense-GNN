@@ -6,7 +6,7 @@ class BaselineMLP(nn.Module):
     Standard Multi-Layer Perceptron (MLP) for binary classification.
     Serves as the deep learning baseline for the EMBER dataset.
     """
-    def __init__(self, input_dim: int = 2381, hidden_dims: list = [1024, 512, 256], dropout_rate: float = 0.3):
+    def __init__(self, input_dim: int, hidden_dims: list, dropout_rate: float):
         """
         Args:
             input_dim (int): Number of input features (2381 for EMBER).
@@ -15,7 +15,7 @@ class BaselineMLP(nn.Module):
         """
         super().__init__()
         
-        # Data Nomralitation
+        # Data Normalization placed at the very start of the network sequence
         layers = [nn.BatchNorm1d(input_dim)]
         current_dim = input_dim
         
@@ -38,4 +38,6 @@ class BaselineMLP(nn.Module):
             torch.Tensor: Raw logits (not probabilities). 
                           Sigmoid is applied later during the loss calculation.
         """
-        return self.network(x)
+        # The first layer inside self.network is now your input BatchNorm, 
+        # so you just pass 'x' straight through.
+        return self.network(x).squeeze(1)
