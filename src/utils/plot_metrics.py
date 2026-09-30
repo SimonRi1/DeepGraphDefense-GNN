@@ -115,3 +115,4 @@ def generate_comparison_table(models: list, save_dir: Path, base_exp_dir: Path):
 
     comp_df.to_csv(save_dir / "model_comparison.csv", index=False)
     comp_df.to_markdown(save_dir / "model_comparison.md", index=False)
+
