@@ -1,0 +1,3 @@
+Model,Best Epoch,AUC,F1,Accuracy
+LGBM,20,0.9935,0.9645,0.9645
+GNN,20,0.9722,0.9166,0.9143
