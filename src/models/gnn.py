@@ -13,11 +13,11 @@ from src.utils.config import CONFIG
 
 gnn_config = CONFIG["gnn"]
 
-class MalwareGNN(nn.Module):
+class MFGraph(nn.Module):
     """
     DGCNN (Deep Graph Convolutional Neural Network) with SortPooling.
     """
-    def __init__(self, input_dim: int, hidden_dim: int = gnn_config["hidden_dim"], k: int = len(CONFIG["feature_names"]), dropout_rate: float = gnn_config["dropout_rate"]):
+    def __init__(self, input_dim: int, hidden_dim: int, k: int, dropout_rate: float):
         """
         Args:
             input_dim (int): Dimension of node features.
@@ -25,65 +25,70 @@ class MalwareGNN(nn.Module):
             k (int): The number of nodes to retain in SortPooling (default 9 for your PE graph).
             dropout_rate (float): Dropout probability.
         """
-        super(MalwareGNN, self).__init__()
+        super(MFGraph, self).__init__()
         self.k = k
         
-        # 1. Graph Convolutions
+        # Graph Convolutions layers - Convolutional Layers: 3.
         self.conv1 = GCNConv(input_dim, hidden_dim)
         self.conv2 = GCNConv(hidden_dim, hidden_dim)
         self.conv3 = GCNConv(hidden_dim, hidden_dim)
         
-        self.dropout = nn.Dropout(dropout_rate)
+        #self.dropout = nn.Dropout(dropout_rate)
         
         # In DGCNN, the outputs of all GCN layers are concatenated. 
         # So the total feature dimension per node becomes hidden_dim * 3
         total_latent_dim = hidden_dim * gnn_config["num_layers"]
         
-        # 2. 1D Convolution (The "Remaining Layer" for the sorted graph)
-        # Applies a weighted sum across the k retained nodes to create the final graph embedding
-        self.conv1d = nn.Conv1d(
-            in_channels=total_latent_dim, 
-            out_channels=total_latent_dim, 
-            kernel_size=k
-        )
+        # 2. Graph Representation Learning - Remaining Layer
+        # Implements E = f(W * Z^sp) where W is in R^{1 x k}
+        # A Linear layer applied across the k dimension precisely achieves this matrix multiplication
+        self.w_conv = nn.Linear(self.k, 1)
         
-        # 3. Final Classification Head (Three-Layer Perceptron)
-        self.fc1 = nn.Linear(total_latent_dim, hidden_dim)
-        self.bn1 = nn.BatchNorm1d(hidden_dim) # Retained for numerical stability
-        self.fc2 = nn.Linear(hidden_dim, 1)
+        # 3. Classifier Module (Three-layer MLP)
+        mlp_hidden = gnn_config["mlp_hidden_dim"]
+        
+        # Input layer to first hidden layer
+        self.fc1 = nn.Linear(total_latent_dim, mlp_hidden)
+        # Second hidden layer
+        self.fc2 = nn.Linear(mlp_hidden, mlp_hidden)
+        # Output layer
+        self.fc3 = nn.Linear(mlp_hidden, 1)
+        
+        # Dropout applied after every fully connected layer within the hidden layer
+        self.dropout = nn.Dropout(p=dropout_rate)
 
     def forward(self, x, edge_index, batch):
-        # 1. Message Passing Phase (Multi-Scale)
-        # We must save the output of each layer rather than overwriting 'x'
-        x1 = F.relu(self.conv1(x, edge_index))
-        x2 = F.relu(self.conv2(x1, edge_index))
-        x3 = F.relu(self.conv3(x2, edge_index))
+        # --- Graph Representation Learning ---
         
-        # Concatenate outputs from all convolution layers to capture local substructures at multiple scales
-        x_cat = torch.cat([x1, x2, x3], dim=-1)
+        # Multi-scale feature aggregation
+        z1 = F.relu(self.conv1(x, edge_index))
+        z2 = F.relu(self.conv2(z1, edge_index))
+        z3 = F.relu(self.conv3(z2, edge_index))
         
-        # 2. SortPooling Phase
-        # Sorts vertices based on the last feature channel and truncates/pads the graph to exactly 'k' nodes
-        # Returns a flattened tensor of shape: (batch_size, k * total_latent_dim)
-        x_sorted = global_sort_pool(x_cat, batch, self.k)
+        # Concatenate outputs of all h layers
+        # Output shape: [num_nodes, total_latent_dim]
+        z_concat = torch.cat([z1, z2, z3], dim=-1) 
         
-        # Reshape the flattened tensor into a 1D grid for the convolution layer
-        # Shape becomes: (batch_size, total_latent_dim, k)
-        x_sorted = x_sorted.view(x_sorted.size(0), self.k, -1).transpose(1, 2)
+        # Sorts vertices in decreasing order based on the last channel and retains k nodes
+        # Output shape: [batch_size, k * total_latent_dim]
+        z_sp = global_sort_pool(z_concat, batch, self.k) 
         
-        # 3. 1D Convolution Phase
-        # Compress the 'k' ordered nodes into a single graph embedding vector
-        x_conv = self.conv1d(x_sorted)      # Output shape: (batch, total_latent_dim, 1)
-        x_conv = x_conv.squeeze(-1)         # Flatten to: (batch, total_latent_dim)
-        x_conv = F.relu(x_conv)
-        x_conv = self.dropout(x_conv)
+        # Reshape and transpose to [batch_size, total_latent_dim, k] for W multiplication
+        z_sp = z_sp.view(-1, self.k, z_concat.size(-1)).transpose(1, 2)
         
-        # 4. Classification Phase (MLP)
-        out = self.fc1(x_conv)
-        out = self.bn1(out)
-        out = F.relu(out)
-        out = self.dropout(out)
-        out = self.fc2(out)
+        # Apply the parametrically represented single-channel Conv 1D layer
+        # Output shape: [batch_size, total_latent_dim]
+        e_g = F.relu(self.w_conv(z_sp)).squeeze(-1) 
         
-        # Return raw logits for BCEWithLogitsLoss
+        # --- Classifier Module ---
+        
+        h = F.relu(self.fc1(e_g))
+        h = self.dropout(h)
+        
+        h = F.relu(self.fc2(h))
+        h = self.dropout(h)
+        
+        # Outputs a raw logit compatible with BCEWithLogitsLoss
+        out = self.fc3(h) 
+        
         return out
