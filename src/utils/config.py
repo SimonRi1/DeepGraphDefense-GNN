@@ -58,7 +58,7 @@ CONFIG = {
         "learning_rate": 0.001,
         "num_epochs": 20,        # MLPs converge much faster than GNNs
         "hidden_dims": [1024, 512, 256],
-        "dropout_rate": 0.3,
+        "dropout_rate": 0.5,
     },
 
     # LightGBM Baseline Parameters
