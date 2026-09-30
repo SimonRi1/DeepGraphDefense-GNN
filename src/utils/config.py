@@ -48,6 +48,11 @@ CONFIG = {
         "mlp_hidden_dim": 1024,
         "k": 28
     },
+
+    "gan": {
+        "epochs": 20,
+        "dropout_rate": 0.7,
+    },
     # Max len of the feature vector for each node (for uniform padding)
     "max_feature_len": 512,
 
