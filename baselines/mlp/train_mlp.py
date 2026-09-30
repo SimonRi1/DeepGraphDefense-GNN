@@ -26,16 +26,13 @@ def train_baseline_mlp():
     print(f"Using device: {device}")
 
     # 1. Initialize Logger
-    # We pass the entire CONFIG so the logger saves all hyperparameters for reproducibility
     logger = ExperimentLogger(experiment_name="mlp_baseline", config=CONFIG)
 
     # 2. Load Data
-    # Resolves to thesis-project/data/raw/ember2018 using the config path
     data_dir = CONFIG["ember_path"]
     train_dataset = EmberFlatDataset(data_dir=str(data_dir), split="train")
     test_dataset = EmberFlatDataset(data_dir=str(data_dir), split="test")
 
-    # num_workers=4 speeds up data loading from disk
     train_loader = DataLoader(train_dataset, batch_size=mlp_config["batch_size"], shuffle=True, num_workers=4)
     test_loader = DataLoader(test_dataset, batch_size=mlp_config["batch_size"], shuffle=False, num_workers=4)
 
@@ -43,13 +40,13 @@ def train_baseline_mlp():
     model = BaselineMLP(
         input_dim=mlp_config["input_dim"],
         hidden_dims=mlp_config["hidden_dims"],
-        dropout_rate=mlp_config["dropout_rate"]
+        dropout_rate=mlp_config.get("dropout_rate", 0.5)
     ).to(device)
     
     criterion = nn.BCEWithLogitsLoss()
-    optimizer = optim.Adam(model.parameters(), lr=mlp_config["learning_rate"])
+    optimizer = optim.Adam(model.parameters(), lr=mlp_config["learning_rate"], weight_decay=1e-4)
 
-    # 4. Training Loop (Progress bar removed, standard python loop used)
+    # 4. Training Loop
     print(f"\nStarting training loop for {mlp_config['num_epochs']} epochs...")
     for epoch in range(1, mlp_config["num_epochs"] + 1):
         model.train()
@@ -58,11 +55,27 @@ def train_baseline_mlp():
         for features, labels in tqdm(train_loader, desc=f"Epoch {epoch:02d} [Train]"):
             features, labels = features.to(device), labels.to(device)
             
+            # FLATTEN: Make labels 1D immediately so the mask is 1D
+            labels = labels.view(-1)
+            
+            # FILTER: Remove unlabeled (-1) samples from the batch
+            mask = labels >= 0
+            if not mask.any():
+                continue
+            features = features[mask]
+            labels = labels[mask]
+            
             optimizer.zero_grad()
-            outputs = model(features)
-            loss = criterion(outputs, labels)
+            outputs = model(features).view(-1)
+            
+            # CLAMP: Prevent extreme logits from blowing up the BCE Loss
+            outputs = torch.clamp(outputs, min=-12.0, max=12.0)
+            
+            # LOSS: labels is already 1D now
+            loss = criterion(outputs, labels.float())
             
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             
             train_loss += loss.item()
@@ -78,13 +91,26 @@ def train_baseline_mlp():
             for features, labels in tqdm(test_loader, desc=f"Epoch {epoch:02d} [Test]"):
                 features, labels = features.to(device), labels.to(device)
                 
-                outputs = model(features)
-                loss = criterion(outputs, labels)
+                # FLATTEN: Make labels 1D immediately
+                labels = labels.view(-1)
+                
+                # FILTER: Remove unlabeled (-1) samples from the batch
+                mask = labels >= 0
+                if not mask.any():
+                    continue
+                features = features[mask]
+                labels = labels[mask]
+                
+                outputs = model(features).view(-1)
+                
+                # CLAMP: Prevent extreme logits from blowing up the BCE Loss
+                outputs = torch.clamp(outputs, min=-12.0, max=12.0)
+                
+                # LOSS: labels is already 1D now
+                loss = criterion(outputs, labels.float())
                 test_loss += loss.item()
                 
-                # Convert logits to probabilities [0, 1] for metric calculations
                 probs = torch.sigmoid(outputs)
-                
                 all_preds.extend(probs.cpu().numpy())
                 all_labels.extend(labels.cpu().numpy())
                 
@@ -105,12 +131,10 @@ def train_baseline_mlp():
             "recall": recall_score(all_labels, preds_binary)
         }
         
-        # Print a clean summary string to the terminal
         print(f"Epoch {epoch:02d}/{mlp_config['num_epochs']} - "
               f"Train Loss: {avg_train_loss:.4f} | Test Loss: {avg_test_loss:.4f} | "
               f"AUC: {metrics['auc']:.4f} | F1: {metrics['f1']:.4f}")
         
-        # Log metrics to our fixed-width file automatically
         logger.log_epoch(epoch=epoch, metrics=metrics)
         
     # 7. Save final model weights
