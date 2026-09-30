@@ -13,6 +13,7 @@ PyLibs
 *.zip
 *.7z
 data/
+experiments/
 
 # Exclude default and custom temporary directories
 Backup_*
