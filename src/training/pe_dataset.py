@@ -12,12 +12,14 @@ class PEGraphDataset(GeometricDataset):
     """
     Dataset loader for GNN and GAN models.
     Loads pre-processed PyTorch Geometric .pt graph files from disk.
+    Supports recursive searching for subfolders (e.g., test/02, test/03).
     """
     def __init__(self, root_dir):
         super().__init__()
         print(f"[Dataset] Indexing files in {root_dir}...")
         
-        self.file_paths = [Path(root_dir) / f for f in os.listdir(root_dir) if f.endswith('.pt')]
+        # Use rglob to recursively find all .pt files, including those in subfolders
+        self.file_paths = list(Path(root_dir).rglob('*.pt'))
         
         if not self.file_paths:
             raise FileNotFoundError(f"No .pt files found in {root_dir}")
