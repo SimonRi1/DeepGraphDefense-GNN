@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv, global_sort_pool
+import warnings
 
 from pathlib import Path
 import sys
@@ -12,6 +13,7 @@ if str(project_root) not in sys.path:
 from src.utils.config import CONFIG
 
 gnn_config = CONFIG["gnn"]
+warnings.filterwarnings("ignore")
 
 class MFGraph(nn.Module):
     """
