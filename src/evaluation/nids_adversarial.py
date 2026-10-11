@@ -143,7 +143,7 @@ def evaluate_nids_adversarial():
     gnn_model = load_nids_gnn(device)
     
     baseline_dir = project_root / "experiments" / "NIDSbaselines_training"
-    model_names = ["Random Forest", "Decision Tree ID3", "AdaBoost", "MLP"]
+    model_names = ["Random Forest", "Decision Tree ID3", "AdaBoost", "MLP", "SVM"]
     baselines = {}
     
     if baseline_dir.exists():
@@ -157,9 +157,11 @@ def evaluate_nids_adversarial():
         raise FileNotFoundError(f"No pre-trained NIDS baseline models found in {baseline_dir}. Run baseline training first.")
 
     # 3. Define Attacks Configuration
+    Psize_scales = [1.0, 0.8, 0.5, 0.1, 2.0, 5.0]
+    IAtime_scales = [1.0, 2.0, 5.0, 10.0]
     attacks = {
-        "Packet_Size": {"feat_idx": 2, "scales": [1.0, 0.8, 0.5, 0.1, 2.0, 5.0]},
-        "Inter-Arrival_Time": {"feat_idx": 4, "scales": [1.0, 2.0, 5.0, 10.0]}
+        "Packet_Size": {"feat_idx": 2, "scales": Psize_scales},
+        "Inter-Arrival_Time": {"feat_idx": 4, "scales": IAtime_scales}
     }
     
     out_dir = project_root / "experiments" / "nids_adversarial"
@@ -226,9 +228,11 @@ def evaluate_nids_adversarial():
         
         # Pivot tables
         df_f1 = df_all.pivot(index="Scale", columns="Model", values="F1")
+        df_f1 = df_f1.sort_index(key=lambda x: x.str.replace('x', '').astype(float))
         df_f1.to_csv(out_dir / f"{attack_name.replace('_', ' ')}_robustness.csv")
         
         df_rec = df_all.pivot(index="Scale", columns="Model", values="Recall")
+        df_rec = df_rec.sort_index(key=lambda x: x.str.replace('x', '').astype(float))
         df_rec.to_csv(out_dir / f"{attack_name.replace('_', ' ')}_recall.csv")
         
         print("\n" + "="*50)

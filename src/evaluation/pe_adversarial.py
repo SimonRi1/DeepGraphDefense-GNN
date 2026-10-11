@@ -26,7 +26,7 @@ from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.neural_network import MLPClassifier
-from lightgbm import LGBMClassifier
+#from lightgbm import LGBMClassifier
 
 project_root = Path(__file__).resolve().parents[2]
 if str(project_root) not in sys.path:
@@ -224,7 +224,7 @@ def evaluate_pe_adversarial():
     gan_gen = load_pe_gan(device)
     
     baseline_dir = project_root / "experiments" / "PEbaselines_training"
-    model_names = ["LR-based", "DT-based", "SVM-based", "KNN-based", "AdaBoost-based", "MLP-based", "LightGBM"]
+    model_names = ["LR-based", "DT-based", "SVM-based", "KNN-based", "AdaBoost-based", "MLP-based", "FFDNN-based"]
     baselines = {}
     
     if baseline_dir.exists():
@@ -232,21 +232,10 @@ def evaluate_pe_adversarial():
             model_path = baseline_dir / f"{name.replace(' ', '_')}.joblib"
             if model_path.exists():
                 baselines[name] = joblib.load(model_path)
-                
+
     if not baselines:
-        print("[Notice] Pre-trained baseline weights not found. Auto-fitting baselines on clean samples...")
-        init_models = {
-            "LR-based": LogisticRegression(max_iter=1000),
-            "DT-based": DecisionTreeClassifier(random_state=42),
-            "SVM-based": SVC(probability=True, random_state=42),
-            "KNN-based": KNeighborsClassifier(),
-            "AdaBoost-based": AdaBoostClassifier(random_state=42),
-            "MLP-based": MLPClassifier(max_iter=500, random_state=42),
-            "LightGBM": LGBMClassifier(n_estimators=100, random_state=42, verbose=-1)
-        }
-        for name, mdl in init_models.items():
-            mdl.fit(X_flat, y_true)
-            baselines[name] = mdl
+        raise FileNotFoundError(f"No pre-trained PE baseline models found in {baseline_dir}. Run baseline training first.")
+
 
     # 3. Adversarial Stress Test Loop
     perturbation_scales = [0.0, 0.25, 0.5, 0.75, 1.0]
