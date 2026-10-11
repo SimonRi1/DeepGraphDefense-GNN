@@ -1,146 +1,349 @@
-import torch
+import sys
+import os
+from pathlib import Path
+import random
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import lightgbm as lgb
-from sklearn.metrics import roc_auc_score
-from pathlib import Path
+import torch
+from torch_geometric.loader import DataLoader
 from torch_geometric.nn import global_mean_pool
+from sklearn.metrics import roc_auc_score, f1_score, recall_score
+import joblib
 from tqdm import tqdm
 
-import sys
 project_root = Path(__file__).resolve().parents[2]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 from src.utils.config import CONFIG
 from src.models.gnn import MFGraph
-from baselines.mlp.model import BaselineMLP 
+from src.training.pe_dataset import PEGraphDataset
 
-gnn_config = CONFIG["gnn"]
-mlp_config = CONFIG["mlp"]
 
-def evaluate_concept_drift(gnn_weights_path, gan_weights_path, mlp_weights_path, lgbm_weights_path, monthly_loaders, device):
-    """
-    Evaluates 4 models chronologically to analyze concept drift mitigation.
-    monthly_loaders: dictionary {2: loader_feb, 3: loader_mar, ..., 12: loader_dec}
-    """
-    input_dim = CONFIG["max_feature_len"]
+# =====================================================================
+# Model Checkpoint Resolvers
+# =====================================================================
 
-    # 1. Initialize and Load All Models
-    print("\n[Evaluation] Loading trained models...")
-    
-    # Baseline GNN
-    gnn_model = MFGraph(input_dim, hidden_dim=gnn_config["hidden_dim"], k=gnn_config["k"], dropout_rate=gnn_config["dropout_rate"]).to(device)
-    gnn_model.load_state_dict(torch.load(gnn_weights_path))
-    gnn_model.eval()
-    
-    # GAN-Augmented GNN
-    gan_model = MFGraph(input_dim, hidden_dim=gnn_config["hidden_dim"], k=gnn_config["k"], dropout_rate=gnn_config["dropout_rate"]).to(device)
-    gan_model.load_state_dict(torch.load(gan_weights_path))
-    gan_model.eval()
+def load_latest_gnn(domain="pe", device="cpu"):
+    """Loads the GNN model from the latest timestamped folder for PE or NIDS."""
+    gnn_config = CONFIG.get("gnn", {"hidden_dim": 64, "k": 10, "dropout_rate": 0.5})
+    base_dir = project_root / CONFIG.get("experiments_path", "experiments")
+    exp_dir = base_dir / ("gnn_training" if domain == "pe" else "nids_gnn")
 
-    # MLP Baseline
-    mlp_model = BaselineMLP(input_dim, hidden_dims=mlp_config["hidden_dims"], dropout_rate=mlp_config["dropout_rate"]).to(device)
-    mlp_model.load_state_dict(torch.load(mlp_weights_path))
-    mlp_model.eval()
+    if not exp_dir.exists():
+        raise FileNotFoundError(f"Experiment folder not found: {exp_dir}")
 
-    # LightGBM Baseline (Loads the booster directly from the .txt file)
-    lgbm_model = lgb.Booster(model_file=str(lgbm_weights_path))
-    
-    results = []
-    
-    print("\n[Evaluation] Starting chronological testing (Feb - Dec 2018)...")
-    with torch.no_grad():
-        for month, loader in monthly_loaders.items():
-            gnn_preds, gan_preds, mlp_preds, lgbm_preds, labels = [], [], [], [], []
-            
-            for batch in tqdm(loader, desc=f"Evaluating Month {month:02d}", leave=False, unit="batch"):
-                batch = batch.to(device)
-                
-                # --- Graph Inference ---
-                # GNN
-                out_gnn = gnn_model(batch.x, batch.edge_index, batch.batch)
-                gnn_preds.extend(torch.sigmoid(out_gnn.view(-1)).cpu().numpy())
-                
-                # GAN
-                out_gan = gan_model(batch.x, batch.edge_index, batch.batch)
-                gan_preds.extend(torch.sigmoid(out_gan.view(-1)).cpu().numpy())
-                
-                # --- Tabular Inference ---
-                # Collapse graphs into 1D vectors via Mean Pooling for MLP/LGBM
-                pooled_features = global_mean_pool(batch.x, batch.batch)
-                
-                # MLP
-                out_mlp = mlp_model(pooled_features)
-                mlp_preds.extend(torch.sigmoid(out_mlp.view(-1)).cpu().numpy())
-                
-                # LGBM (Requires CPU Numpy array)
-                lgbm_batch_preds = lgbm_model.predict(pooled_features.cpu().numpy())
-                lgbm_preds.extend(lgbm_batch_preds)
-                
-                labels.extend(batch.y.cpu().numpy())
-            
-            # Calculate monthly AUC for all models
-            gnn_auc = roc_auc_score(labels, gnn_preds)
-            gan_auc = roc_auc_score(labels, gan_preds)
-            mlp_auc = roc_auc_score(labels, mlp_preds)
-            lgbm_auc = roc_auc_score(labels, lgbm_preds)
-            
-            results.append({
+    timestamp_dirs = sorted([d for d in exp_dir.iterdir() if d.is_dir()], reverse=True)
+    if not timestamp_dirs:
+        raise FileNotFoundError(f"No timestamped folders found in {exp_dir}")
+
+    latest_run = timestamp_dirs[0]
+    checkpoints = list(latest_run.rglob("*.pth")) + list(latest_run.rglob("*.pt"))
+    if not checkpoints:
+        raise FileNotFoundError(f"No checkpoints found in {latest_run}")
+
+    weights_path = max(checkpoints, key=lambda f: f.stat().st_mtime)
+    print(f"[{domain.upper()} Drift] Loaded GNN: {latest_run.name}/{weights_path.name}")
+
+    input_dim = 512 if domain == "pe" else 9
+    model = MFGraph(
+        input_dim=input_dim,
+        hidden_dim=gnn_config.get("hidden_dim", 64),
+        k=gnn_config.get("k", 10),
+        dropout_rate=gnn_config.get("dropout_rate", 0.5)
+    ).to(device)
+
+    state_dict = torch.load(weights_path, map_location=device)
+    if isinstance(state_dict, dict) and "model_state_dict" in state_dict:
+        state_dict = state_dict["model_state_dict"]
+    model.load_state_dict(state_dict)
+    model.eval()
+    return model
+
+
+def load_joblib_baselines(baseline_dir, model_names):
+    """Loads all pre-trained tabular baselines from .joblib files."""
+    baselines = {}
+    if not baseline_dir.exists():
+        print(f"[Warning] Baseline directory not found: {baseline_dir}")
+        return baselines
+
+    for name in model_names:
+        clean_name = name.replace(" ", "_").replace("(", "").replace(")", "")
+        path = baseline_dir / f"{clean_name}.joblib"
+        if path.exists():
+            baselines[name] = joblib.load(path)
+        else:
+            print(f"[Warning] Missing baseline: {path.name}")
+    return baselines
+
+
+# =====================================================================
+# PE Domain Concept Drift (Monthly EMBER Subfolders: Months 02-12)
+# =====================================================================
+
+def evaluate_pe_concept_drift(device):
+    print("\n========================================================")
+    print("      PE DOMAIN: CONCEPT DRIFT CHRONOLOGICAL TEST")
+    print("========================================================")
+
+    test_base_path = project_root / "data" / "graphs" / "ember_graphs" / "test"
+    monthly_loaders = {}
+
+    for month in range(2, 13):
+        m_path = test_base_path / f"{month:02d}"
+        if m_path.exists() and list(m_path.rglob("*.pt")):
+            ds = PEGraphDataset(str(m_path))
+            # Evaluation batching
+            monthly_loaders[month] = DataLoader(ds, batch_size=64, shuffle=False)
+
+    if not monthly_loaders:
+        raise FileNotFoundError(f"No monthly subdirectories found in {test_base_path}")
+
+    # Load Models
+    gnn_model = load_latest_gnn(domain="pe", device=device)
+    baseline_dir = project_root / "experiments" / "PEbaselines_training"
+    pe_models = [
+        "LR-based", "DT-based", "SVM-based", "KNN-based",
+        "AdaBoost-based", "MLP-based", "FFDNN-based"
+    ]
+    baselines = load_joblib_baselines(baseline_dir, pe_models)
+
+    records = []
+
+    for month, loader in monthly_loaders.items():
+        print(f"\nEvaluating Month {month:02d} ({len(loader.dataset)} graphs)...")
+        all_pooled = []
+        labels = []
+        gnn_probs = []
+
+        with torch.no_grad():
+            for batch in tqdm(loader, desc=f"Month {month:02d}", leave=False):
+                # 1. GNN Prediction
+                out = gnn_model(batch.x.to(device), batch.edge_index.to(device), batch.batch.to(device) if hasattr(batch, 'batch') else None)
+                probs = torch.sigmoid(out.view(-1)).cpu().numpy()
+                gnn_probs.extend(probs)
+
+                # 2. Extract Pooled Tabular Features for Baselines
+                pooled = global_mean_pool(batch.x, batch.batch if hasattr(batch, 'batch') else torch.zeros(batch.x.size(0), dtype=torch.long))
+                all_pooled.append(pooled.cpu().numpy())
+
+                # Collect labels
+                y = batch.y.cpu().numpy() if hasattr(batch, 'y') else [0] * pooled.size(0)
+                labels.extend(y if len(y) == pooled.size(0) else [y[0]] * pooled.size(0))
+
+        X_tabular = np.vstack(all_pooled)
+        y_true = np.array(labels, dtype=int)
+
+        # Record GNN Performance
+        gnn_preds = (np.array(gnn_probs) >= 0.5).astype(int)
+        gnn_auc = roc_auc_score(y_true, gnn_probs) if len(np.unique(y_true)) > 1 else np.nan
+        records.append({
+            "TimeStep": f"Month_{month:02d}",
+            "Month": month,
+            "Model": "GNN (MFGraph)",
+            "AUC": gnn_auc,
+            "F1": f1_score(y_true, gnn_preds, zero_division=0),
+            "Recall": recall_score(y_true, gnn_preds, zero_division=0)
+        })
+
+        # Record Tabular Baselines Performance
+        for name, model in baselines.items():
+            y_pred = model.predict(X_tabular)
+            y_prob = model.predict_proba(X_tabular)[:, 1] if hasattr(model, "predict_proba") else None
+            auc = roc_auc_score(y_true, y_prob) if y_prob is not None and len(np.unique(y_true)) > 1 else np.nan
+
+            records.append({
+                "TimeStep": f"Month_{month:02d}",
                 "Month": month,
-                "LGBM_AUC": lgbm_auc,
-                "MLP_AUC": mlp_auc,
-                "GNN_AUC": gnn_auc,
-                "GAN_AUC": gan_auc
+                "Model": name,
+                "AUC": auc,
+                "F1": f1_score(y_true, y_pred, zero_division=0),
+                "Recall": recall_score(y_true, y_pred, zero_division=0)
             })
-            print(f"Month {month:02d} | LGBM: {lgbm_auc:.4f} | MLP: {mlp_auc:.4f} | GNN: {gnn_auc:.4f} | GAN: {gan_auc:.4f}")
 
-    df_results = pd.DataFrame(results)
-    
-    # 3. Calculate Degradation Rate: (Max - Min) / Max
-    def calc_deg(col_name):
-        return (df_results[col_name].max() - df_results[col_name].min()) / df_results[col_name].max()
-
-    deg_rates = {
-        "LGBM": calc_deg("LGBM_AUC"),
-        "MLP": calc_deg("MLP_AUC"),
-        "GNN": calc_deg("GNN_AUC"),
-        "GAN": calc_deg("GAN_AUC")
-    }
-    
-    print("\n--- Degradation Rate ---")
-    print(f"LightGBM:     {deg_rates['LGBM']:.2%}")
-    print(f"MLP:          {deg_rates['MLP']:.2%}")
-    print(f"Baseline GNN: {deg_rates['GNN']:.2%}")
-    print(f"GNN + GAN:    {deg_rates['GAN']:.2%}")
-    
-    # 4. Save Table to Unified Folder
-    out_dir = Path(CONFIG["experiments_path"]) / "drift_comparisons"
+    # Save & Plot PE Results
+    out_dir = project_root / CONFIG.get("experiments_path", "experiments") / "concept_drift"
     out_dir.mkdir(parents=True, exist_ok=True)
-    df_results.to_csv(out_dir / "monthly_auc_4way_comparison.csv", index=False)
-    
-    # 5. Generate 4-Way Plot
-    plt.figure(figsize=(12, 7))
-    
-    # Standard Baselines (Dashed Lines)
-    plt.plot(df_results["Month"], df_results["LGBM_AUC"], marker='v', linestyle='--', color='orange', alpha=0.8, label=f"LightGBM (Deg: {deg_rates['LGBM']:.1%})")
-    plt.plot(df_results["Month"], df_results["MLP_AUC"], marker='^', linestyle='--', color='green', alpha=0.8, label=f"MLP (Deg: {deg_rates['MLP']:.1%})")
-    
-    # Graph Models (Solid Lines)
-    plt.plot(df_results["Month"], df_results["GNN_AUC"], marker='o', linestyle='-', color='red', linewidth=2, label=f"Baseline GNN (Deg: {deg_rates['GNN']:.1%})")
-    plt.plot(df_results["Month"], df_results["GAN_AUC"], marker='s', linestyle='-', color='blue', linewidth=2.5, label=f"GNN + GAN (Deg: {deg_rates['GAN']:.1%})")
-    
-    plt.title('Impact of Concept Drift on Malware Detection (EMBER 2018)', fontsize=14, fontweight='bold')
-    plt.xlabel('Evaluation Month (2018)', fontsize=12)
-    plt.ylabel('AUC Score', fontsize=12)
-    plt.xticks(range(2, 13)) # Months 2 to 12
-    plt.ylim(0.5, 1.0)
-    
-    plt.grid(True, linestyle='--', alpha=0.5)
-    plt.legend(loc='lower left', fontsize=10, framealpha=0.9)
+
+    df_pe = pd.DataFrame(records)
+    df_pe.to_csv(out_dir / "PE_concept_drift_metrics.csv", index=False)
+
+    df_pivot_auc = df_pe.pivot(index="Month", columns="Model", values="AUC")
+    df_pivot_auc.to_csv(out_dir / "PE_concept_drift_AUC.csv")
+
+    _generate_drift_plot(
+        df_pe,
+        x_col="Month",
+        metric="AUC",
+        title="Host Domain: Concept Drift on Malware Detection (EMBER 2018)",
+        xlabel="Evaluation Month (2018)",
+        save_path=out_dir / "PE_concept_drift_AUC.png"
+    )
+    print(f"[Success] PE Drift evaluation complete. Artifacts saved to: {out_dir}")
+
+
+# =====================================================================
+# NIDS Domain Concept Drift (Sequential Temporal Chunks: Chunks 1-10)
+# =====================================================================
+
+def evaluate_nids_concept_drift(device):
+    print("\n========================================================")
+    print("     NIDS DOMAIN: CONCEPT DRIFT CHRONOLOGICAL TEST")
+    print("========================================================")
+
+    nids_data_path = project_root / "data" / "graphs" / "nids_graphs"
+    if not nids_data_path.exists():
+        raise FileNotFoundError(f"NIDS graph directory not found: {nids_data_path}")
+
+    dataset = PEGraphDataset(str(nids_data_path))
+    total_graphs = len(dataset)
+    num_chunks = 10
+    chunk_size = total_graphs // num_chunks
+    print(f"[Info] Evaluating across {num_chunks} sequential temporal chunks (~{chunk_size} graphs each)...")
+
+    # Load Models
+    gnn_model = load_latest_gnn(domain="nids", device=device)
+    baseline_dir = project_root / "experiments" / "NIDSbaselines_training"
+    nids_models = ["Random Forest", "Decision Tree ID3", "AdaBoost", "MLP", "SVM"]
+    baselines = load_joblib_baselines(baseline_dir, nids_models)
+
+    records = []
+
+    for chunk_idx in range(num_chunks):
+        start_idx = chunk_idx * chunk_size
+        end_idx = start_idx + chunk_size if chunk_idx < num_chunks - 1 else total_graphs
+
+        chunk_subset = torch.utils.data.Subset(dataset, list(range(start_idx, end_idx)))
+        loader = DataLoader(chunk_subset, batch_size=256, shuffle=False)
+
+        all_pooled = []
+        labels = []
+        gnn_probs = []
+
+        with torch.no_grad():
+            for batch in loader:
+                # 1. GNN Inference
+                out = gnn_model(batch.x.to(device), batch.edge_index.to(device), batch.batch.to(device))
+                probs = torch.sigmoid(out.view(-1)).cpu().numpy()
+                gnn_probs.extend(probs)
+
+                # 2. Extract Tabular Features
+                pooled = global_mean_pool(batch.x, batch.batch)
+                all_pooled.append(pooled.cpu().numpy())
+
+                y = batch.y.cpu().numpy() if hasattr(batch, 'y') else [0] * pooled.size(0)
+                labels.extend(y if len(y) == pooled.size(0) else [y[0]] * pooled.size(0))
+
+        X_raw = np.vstack(all_pooled)
+        X_scaled = np.log1p(np.clip(X_raw, a_min=0.0, a_max=None))
+        y_true = np.array(labels, dtype=int)
+
+        chunk_label = f"Chunk_{chunk_idx + 1:02d}"
+
+        # Evaluate GNN
+        gnn_preds = (np.array(gnn_probs) >= 0.5).astype(int)
+        gnn_auc = roc_auc_score(y_true, gnn_probs) if len(np.unique(y_true)) > 1 else np.nan
+        records.append({
+            "TimeStep": chunk_label,
+            "Chunk": chunk_idx + 1,
+            "Model": "GNN (MFGraph)",
+            "AUC": gnn_auc,
+            "F1": f1_score(y_true, gnn_preds, zero_division=0),
+            "Recall": recall_score(y_true, gnn_preds, zero_division=0)
+        })
+
+        # Evaluate Tabular Baselines
+        for name, model in baselines.items():
+            y_pred = model.predict(X_scaled)
+            y_prob = model.predict_proba(X_scaled)[:, 1] if hasattr(model, "predict_proba") else None
+            auc = roc_auc_score(y_true, y_prob) if y_prob is not None and len(np.unique(y_true)) > 1 else np.nan
+
+            records.append({
+                "TimeStep": chunk_label,
+                "Chunk": chunk_idx + 1,
+                "Model": name,
+                "AUC": auc,
+                "F1": f1_score(y_true, y_pred, zero_division=0),
+                "Recall": recall_score(y_true, y_pred, zero_division=0)
+            })
+
+    # Save & Plot NIDS Results
+    out_dir = project_root / CONFIG.get("experiments_path", "experiments") / "concept_drift"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    df_nids = pd.DataFrame(records)
+    df_nids.to_csv(out_dir / "NIDS_concept_drift_metrics.csv", index=False)
+
+    df_pivot_f1 = df_nids.pivot(index="Chunk", columns="Model", values="F1")
+    df_pivot_f1.to_csv(out_dir / "NIDS_concept_drift_F1.csv")
+
+    _generate_drift_plot(
+        df_nids,
+        x_col="Chunk",
+        metric="F1",
+        title="Network Domain: Concept Drift Over Sequential Flow Chunks",
+        xlabel="Time Chunk (Sequential Temporal Windows)",
+        save_path=out_dir / "NIDS_concept_drift_F1.png"
+    )
+    print(f"[Success] NIDS Drift evaluation complete. Artifacts saved to: {out_dir}")
+
+
+# =====================================================================
+# Shared Plotting Helper
+# =====================================================================
+
+def _generate_drift_plot(df, x_col, metric, title, xlabel, save_path):
+    plt.figure(figsize=(12, 6))
+    markers = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*']
+    models = df['Model'].unique()
+
+    for idx, model in enumerate(models):
+        m_df = df[df['Model'] == model].sort_values(by=x_col)
+        is_gnn = "GNN" in model or "MFGraph" in model
+        linewidth = 3.5 if is_gnn else 1.5
+
+        # Calculate Degradation Rate: (Max - Min) / Max
+        val_max = m_df[metric].max()
+        val_min = m_df[metric].min()
+        deg = ((val_max - val_min) / val_max * 100) if (pd.notnull(val_max) and val_max > 0) else 0.0
+
+        label = f"{model} (Deg: {deg:.1f}%)" if is_gnn else model
+
+        plt.plot(
+            m_df[x_col],
+            m_df[metric],
+            marker=markers[idx % len(markers)],
+            linewidth=linewidth,
+            label=label
+        )
+
+    plt.title(title, fontsize=13, fontweight='bold', pad=15)
+    plt.xlabel(xlabel, fontsize=11)
+    plt.ylabel(f"{metric} Score", fontsize=11)
+    plt.ylim(0.4, 1.05)
+    plt.grid(True, linestyle="--", alpha=0.6)
+    plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=10)
     plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+# =====================================================================
+# Entrypoint
+# =====================================================================
+
+def run_concept_drift():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"[Concept Drift] Initializing on device: {device}")
     
-    plt.savefig(out_dir / "concept_drift_plot_4way.png", dpi=300)
-    print(f"\n[Success] Unified Plot and table saved to {out_dir}")
-    plt.show()
+    # 1. Run PE Domain Chronological Drift
+    evaluate_pe_concept_drift(device)
+    
+    # 2. Run NIDS Domain Temporal Drift
+    evaluate_nids_concept_drift(device)
+
+
+if __name__ == "__main__":
+    run_concept_drift()
