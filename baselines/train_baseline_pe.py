@@ -11,7 +11,7 @@ from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.neural_network import MLPClassifier
-from lightgbm import LGBMClassifier
+#from lightgbm import LGBMClassifier
 
 project_root = Path(__file__).resolve().parents[2]
 if str(project_root) not in sys.path:
@@ -46,7 +46,8 @@ def train_pe_baselines():
         "KNN-based": KNeighborsClassifier(),
         "AdaBoost-based": AdaBoostClassifier(),
         "MLP-based": MLPClassifier(max_iter=500),
-        "LightGBM": LGBMClassifier(n_estimators=100)
+        #"LightGBM": LGBMClassifier(n_estimators=100)
+        "FFDNN-based": MLPClassifier(hidden_layer_sizes=(128, 64, 32), max_iter=500, random_state=42)
     }
     
     out_dir = project_root / "experiments" / "PEbaselines_training"

@@ -7,6 +7,7 @@ import torch
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neural_network import MLPClassifier
+from sklearn.svm import SVC
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import global_mean_pool
 import joblib
@@ -51,7 +52,8 @@ def train_and_save_baselines():
         "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
         "Decision Tree (ID3)": DecisionTreeClassifier(random_state=42),
         "AdaBoost": AdaBoostClassifier(random_state=42),
-        "MLP": MLPClassifier(hidden_layer_sizes=(64, 32), max_iter=50, random_state=42)
+        "MLP": MLPClassifier(hidden_layer_sizes=(64, 32), max_iter=50, random_state=42),
+        "SVM": SVC(probability=True, random_state=42)
     }
 
     baseline_dir = project_root / "experiments" / "NIDSbaselines_training"
