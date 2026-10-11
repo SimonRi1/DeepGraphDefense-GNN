@@ -56,22 +56,4 @@ CONFIG = {
     # Max len of the feature vector for each node (for uniform padding)
     "max_feature_len": 512,
 
-    # MLP Baseline Parameters
-    "mlp": {
-        "input_dim": 2381,       # EMBER flat feature size
-        "batch_size": 2048,      # Large batch for fast tabular training
-        "learning_rate": 0.001,
-        "num_epochs": 20,        # MLPs converge much faster than GNNs
-        "hidden_dims": [1024, 512, 256],
-        "dropout_rate": 0.5,
-    },
-
-    # LightGBM Baseline Parameters
-    "lgbm": {
-        "n_estimators": 1000,    # Number of trees (EMBER paper uses 1000-2000)
-        "learning_rate": 0.05,
-        "num_leaves": 31,
-        "objective": "binary",
-    }
-
 }
