@@ -22,36 +22,37 @@ def train_nids_gnn():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"\n[NIDS Training] Using device: {device}")
 
-    data_dir = project_root / "data" / "graphs" / "nids_graphs"
-    if not data_dir.exists() or not any(data_dir.iterdir()):
-        raise FileNotFoundError(f"No graphs found in {data_dir}. Run the builder first.")
+    data_dir = CONFIG["cic_graphs_path"]
 
     # REPLACED random_split with the chronological temporal splitter
     train_loader, val_loader, _ = get_nids_splits(data_dir, batch_size=128, seed=42)
     
-    input_dim = 9 
-    
     gnn_config = CONFIG["gnn"]
+    
+    # FIX 1: Enforce input_dim=12 to match the new graph builder
     model = MFGraph(
-        input_dim=input_dim, 
+        input_dim=12, 
         hidden_dim=gnn_config["hidden_dim"], 
         k=gnn_config["k"], 
-        dropout_rate=gnn_config.get("dropout_rate", 0.5)
+        dropout_rate=gnn_config["dropout_rate"]
     ).to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
     criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3.0]).to(device))
     
+    # Initialize Scheduler
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', patience=2, factor=0.5)
+    
     logger = ExperimentLogger(experiment_name="nids_gnn", config=CONFIG)
     
-    # CHANGED: Tracking AUC instead of F1 to avoid getting stuck on fixed thresholds
+    # Tracking AUC to lock in peak performance
     best_auc = 0.0
-    best_weights = None
+    best_weights = copy.deepcopy(model.state_dict())
     
     # List to store metrics for the CSV
     metrics_history = []
 
-    epochs = gnn_config.get("num_epochs", 20)
+    epochs = gnn_config["num_epochs"]
     for epoch in range(1, epochs + 1):
         model.train()
         train_loss = 0.0
@@ -60,10 +61,8 @@ def train_nids_gnn():
             batch = batch.to(device)
             optimizer.zero_grad()
             
-            # Apply Log Transform to scale down massive network features
-            scaled_x = torch.log1p(torch.clamp(batch.x, min=0.0))
-
-            logits = model(scaled_x, batch.edge_index, batch.batch).squeeze(-1)
+            # FIX 2: Removed double-scaling (log1p). The graph builder already scaled the data.
+            logits = model(batch.x, batch.edge_index, batch.batch).squeeze(-1)
             loss = criterion(logits, batch.y.float())
             
             loss.backward()
@@ -78,8 +77,8 @@ def train_nids_gnn():
             for batch in val_loader:
                 batch = batch.to(device)
 
-                scaled_x = torch.log1p(torch.clamp(batch.x, min=0.0))
-                logits = model(scaled_x, batch.edge_index, batch.batch).squeeze(-1)
+                # Use batch.x directly without scaling again
+                logits = model(batch.x, batch.edge_index, batch.batch).squeeze(-1)
                 
                 probs = torch.sigmoid(logits).cpu().numpy()
                 all_preds.extend(probs)
@@ -100,10 +99,18 @@ def train_nids_gnn():
             "Val_AUC": val_auc
         })
         
-        # CHANGED: Saving condition relies on best AUC
+        # FIX 3: Step the scheduler to reduce learning rate if metrics plateau
+        scheduler.step(val_auc)
+        
+        # Save best weights
         if val_auc > best_auc:
             best_auc = val_auc
             best_weights = copy.deepcopy(model.state_dict())
+            print(f"  --> [*] New best model saved! (AUC: {best_auc:.4f})")
+
+    # FIX 4: Restore best weights before final save
+    print(f"\n[Training Complete] Restoring best weights (Peak AUC: {best_auc:.4f})")
+    model.load_state_dict(best_weights)
 
     # Save final model weights
     model_path = logger.run_dir / "model_gnn.pth"

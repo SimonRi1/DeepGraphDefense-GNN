@@ -63,7 +63,7 @@ def train_gan():
     print(f"Allocated {cpu_cores} CPU threads for PyTorch operations.")
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    graphs_dir = project_root / CONFIG["graphs_path"]
+    graphs_dir = project_root / CONFIG["ember_graphs_path"]
     batch_size = gnn_config["batch_size"]
     
     print("\n[Data] Loading January 2018 dataset (Training set)...")

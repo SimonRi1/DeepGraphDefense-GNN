@@ -16,15 +16,15 @@ def ember_graph_building():
     """
     Parses EMBER .jsonl files to build the training and testing graph datasets.
     Dynamically routes graphs based on the 'appeared' month to evaluate concept drift.
-    - 2018-01 goes to data/graphs/train/
-    - 2018-02 through 2018-12 go to data/graphs/test/02/, data/graphs/test/03/, etc.
+    - 2018-01 goes to data/graphs/ember_graphs/train/
+    - 2018-02 through 2018-12 go to data/graphs/ember_graphs/test/02/, data/graphs/ember_graphs/test/03/, etc.
     """
     builder = FeatureGraphBuilder()
     parser = EmberFeatureParser() 
     
     # Base directory setup
     ember_dir = project_root / CONFIG["ember_path"]
-    graphs_out_dir = project_root / CONFIG["graphs_path"]
+    graphs_out_dir = project_root / CONFIG["ember_graphs_path"]
     
     train_out_dir = graphs_out_dir / "train"
     test_out_dir = graphs_out_dir / "test"

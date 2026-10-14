@@ -31,7 +31,7 @@ def train_gnn():
     print(f"Training on device: {device}")
 
     logger = ExperimentLogger(experiment_name="gnn_training", config=CONFIG)
-    graphs_dir = project_root / CONFIG["graphs_path"]
+    graphs_dir = project_root / CONFIG["ember_graphs_path"]
     
     print("\n[Data] Loading January 2018 dataset (Training set)...")
     full_jan_dataset = PEGraphDataset(graphs_dir / "train")
