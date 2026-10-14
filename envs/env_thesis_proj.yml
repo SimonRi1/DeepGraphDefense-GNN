@@ -15,7 +15,6 @@ dependencies:
   - tqdm
   - pip
   - py-lief
-  - lightgbm
   - tabulate
 
   - pip:
