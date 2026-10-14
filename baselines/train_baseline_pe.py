@@ -12,11 +12,12 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.neural_network import MLPClassifier
 
-project_root = Path(__file__).resolve().parents[2]
+project_root = Path(__file__).resolve().parents[1]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 from src.training.pe_dataset import PEGraphDataset
+from src.utils.config import CONFIG
 
 def extract_flat_features(loader):
     X, y = [], []
