@@ -13,11 +13,12 @@ from torch_geometric.nn import global_mean_pool
 import joblib
 import warnings
 
-project_root = Path(__file__).resolve().parents[2]
+project_root = Path(__file__).resolve().parents[1]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 from src.training.pe_dataset import PEGraphDataset
+from src.utils.config import CONFIG
 warnings.filterwarnings("ignore")
 
 def graphs_to_tabular(dataloader):
@@ -30,7 +31,7 @@ def graphs_to_tabular(dataloader):
     return np.vstack(X), np.array(y)
 
 def train_and_save_baselines():
-    data_dir = project_root / "data" / "graphs" / "nids_graphs"
+    data_dir = CONFIG["cic_graphs_path"]
     dataset = PEGraphDataset(str(data_dir))
     
     # 80/20 Split (Fixed seed for reproducible baseline comparison)

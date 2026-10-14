@@ -82,7 +82,7 @@ def load_nids_gnn(device):
     print(f"[NIDS Adversarial] Loaded GNN weights from: {latest_run.name}/{nids_weights.name}")
     
     model = MFGraph(
-        input_dim=9,
+        input_dim=CONFIG["nids"]["input_dim"],
         hidden_dim=gnn_config.get("hidden_dim", 64),
         k=gnn_config.get("k", 10),
         dropout_rate=gnn_config.get("dropout_rate", 0.5)
