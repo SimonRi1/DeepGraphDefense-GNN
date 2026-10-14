@@ -26,7 +26,6 @@ from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.neural_network import MLPClassifier
-#from lightgbm import LGBMClassifier
 
 project_root = Path(__file__).resolve().parents[2]
 if str(project_root) not in sys.path:

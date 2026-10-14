@@ -11,7 +11,6 @@ from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.neural_network import MLPClassifier
-#from lightgbm import LGBMClassifier
 
 project_root = Path(__file__).resolve().parents[2]
 if str(project_root) not in sys.path:
@@ -28,8 +27,9 @@ def extract_flat_features(loader):
 
 def train_pe_baselines():
     print("[PE Baselines] Loading training data...")
-    
-    pe_train_path = project_root / "data" / "graphs"  / "train" 
+
+    graphs_dir = project_root / CONFIG["ember_graphs_path"]
+    pe_train_path = graphs_dir / "train" 
     pe_dataset = PEGraphDataset(str(pe_train_path))
     
     # avoiding RAM saturation
@@ -46,7 +46,6 @@ def train_pe_baselines():
         "KNN-based": KNeighborsClassifier(),
         "AdaBoost-based": AdaBoostClassifier(),
         "MLP-based": MLPClassifier(max_iter=500),
-        #"LightGBM": LGBMClassifier(n_estimators=100)
         "FFDNN-based": MLPClassifier(hidden_layer_sizes=(128, 64, 32), max_iter=500, random_state=42)
     }
     
