@@ -3,7 +3,8 @@ CONFIG = {
     "ember_path": "data/raw/ember2018",
     "PEsamples_path": "data/raw/test_samples",
     "processed_path": "data/processed",
-    "graphs_path": "data/graphs",
+    "ember_graphs_path": "data/graphs/ember_graphs",
+    "cic_graphs_path": "data/graphs/nids_graphs",
     "experiments_path": "experiments",
 
     # Feature selection
@@ -51,8 +52,13 @@ CONFIG = {
 
     "gan": {
         "epochs": 20,
-        "dropout_rate": 0.7,
+        "dropout_rate": 0.7
     },
+
+    "nids": {
+        "input_dim":12
+    },
+
     # Max len of the feature vector for each node (for uniform padding)
     "max_feature_len": 512,
 
