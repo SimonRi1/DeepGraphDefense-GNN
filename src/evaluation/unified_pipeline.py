@@ -48,18 +48,18 @@ def find_latest_checkpoint(search_dir: Path, pattern_name: str):
         )
     return max(checkpoints, key=lambda f: f.stat().st_mtime)
 
-def load_unified_system(device):
-    """Loads both the PE GNN (input_dim=512) and NIDS GNN (input_dim=9)."""
+def load_unified_system(device, pe_input_dim, nids_input_dim):
+    """Loads both the PE GNN and NIDS GNN using dynamically detected input dimensions."""
     gnn_config = CONFIG["gnn"]
     exp_base = project_root / CONFIG.get("experiments_path", "experiments")
     
-    # 1. Load PE Model (512-dim node features from PE static analysis)
+    # 1. Load PE Model
     pe_dir = exp_base / "gnn_training"
     pe_weights = find_latest_checkpoint(pe_dir, "PE GNN")
     print(f"[Unified Pipeline] Loading PE weights from: {pe_weights}")
     
     pe_model = MFGraph(
-        input_dim=512,
+        input_dim=pe_input_dim, # Set dynamically from the dataset
         hidden_dim=gnn_config["hidden_dim"], 
         k=gnn_config["k"],
         dropout_rate=gnn_config.get("dropout_rate", 0.5)
@@ -67,13 +67,13 @@ def load_unified_system(device):
     pe_model.load_state_dict(torch.load(pe_weights, map_location=device))
     pe_model.eval()
     
-    # 2. Load NIDS Model (9-dim flow features from CIC-IDS2017)
+    # 2. Load NIDS Model
     nids_dir = exp_base / "nids_gnn"
     nids_weights = find_latest_checkpoint(nids_dir, "NIDS GNN")
     print(f"[Unified Pipeline] Loading NIDS weights from: {nids_weights}")
     
     nids_model = MFGraph(
-        input_dim=9, 
+        input_dim=nids_input_dim, # Set dynamically from the dataset
         hidden_dim=gnn_config["hidden_dim"], 
         k=gnn_config["k"],
         dropout_rate=gnn_config.get("dropout_rate", 0.5)
@@ -131,7 +131,6 @@ def simulate_mixed_scenarios(nids_loader, pe_loader, num_scenarios=1000):
     
     rng = np.random.default_rng(42)
     
-    # Usiamo il random base di Python invece di Numpy per oggetti complessi
     for n_label, p_label in scenario_types:
         n_pool = nids_1 if n_label == 1 else nids_0
         p_pool = pe_1 if p_label == 1 else pe_0
@@ -154,17 +153,26 @@ def evaluate_unified_pipeline():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"\n[Unified Pipeline] Initializing on {device}...")
     
-    pe_model, nids_model = load_unified_system(device)
-    
     # 1. Load NIDS holdout test set using your chronological splitter
     nids_dir = project_root / "data" / "graphs" / "nids_graphs"
     _, _, nids_test_loader = get_nids_splits(nids_dir, batch_size=1, seed=42)
+    
+    # Extract NIDS dimension dynamically
+    nids_input_dim = nids_test_loader.dataset[0].x.shape[1]
+    print(f"[GNN] Detected NIDS input dimension: {nids_input_dim}")
     
     # 2. Load PE holdout test set (All Future Months for max concept drift)
     pe_test_path = project_root / "data" / "graphs" / "ember_graphs" / "test"
     
     pe_dataset = PEGraphDataset(str(pe_test_path))
     pe_test_loader = DataLoader(pe_dataset, batch_size=1, shuffle=True)
+    
+    # Extract PE dimension dynamically
+    pe_input_dim = pe_dataset[0].x.shape[1]
+    print(f"[GNN] Detected PE input dimension: {pe_input_dim}")
+    
+    # 3. Load the unified system using the detected dimensions
+    pe_model, nids_model = load_unified_system(device, pe_input_dim, nids_input_dim)
     
     scenarios = simulate_mixed_scenarios(nids_test_loader, pe_test_loader, num_scenarios=400)
     

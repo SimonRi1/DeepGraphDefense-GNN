@@ -21,7 +21,8 @@ Graph Neural Networks and Other Machine Learning Techniques for Malware Analysis
 ## Architecture
 
 ## Project structure
-```
+
+```md
 thesis-project/
 ├── orchestrator.py           # entrypoint for all the functionality
 ├── data/
@@ -74,7 +75,8 @@ thesis-project/
 │   └── random_forest/        # traditional tree model - TODO
 │
 ├── notebooks/
-│   ├── 01_data_exploration.ipynb
+│   ├── 01_data_exploration_EMBER.ipynb
+│   ├── 01_data_exploration_CIC.ipynb
 │   ├── 02_graph_visualization.ipynb
 │   ├── 03_results_analysis.ipynb
 │   ├── 04_adversarial_robustness.ipynb
