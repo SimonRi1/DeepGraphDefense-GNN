@@ -43,7 +43,7 @@ def train_and_save_baselines():
     train_loader = DataLoader(train_data, batch_size=256, shuffle=False)
     test_loader = DataLoader(test_data, batch_size=256, shuffle=False)
 
-    print(f"\n[Baselines] Processing {len(dataset)} graphs for NIDS baselines...")
+    print(f"\n[NIDS Baselines] Processing {len(dataset)} graphs for NIDS baselines...")
     X_train_raw, y_train = graphs_to_tabular(train_loader)
 
     # Apply log1p scaling for training
@@ -60,16 +60,16 @@ def train_and_save_baselines():
     baseline_dir = project_root / "experiments" / "NIDSbaselines_training"
     baseline_dir.mkdir(exist_ok=True, parents=True)
 
+    print("\n[NIDS Baselines] Training and saving models...")
     for name, model in models.items():
-        print(f"[Training] Fitting {name} on clean NIDS data...")
+        print(f" -> Training {name}...")
         model.fit(X_train_scaled, y_train)
         
         # Save model to disk so adversarial evaluation can load it
         model_filename = baseline_dir / f"{name.replace(' ', '_').replace('(', '').replace(')', '')}.joblib"
         joblib.dump(model, model_filename)
-        print(f" -> Saved to {model_filename}")
 
-    print(f"\n[Success] All NIDS baseline models trained and saved successfully.")
+    print(f"\n[Success] All NIDS baseline models trained and saved to {baseline_dir}.")
 
 if __name__ == "__main__":
     train_and_save_baselines()
