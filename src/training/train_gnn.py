@@ -61,7 +61,7 @@ def train_gnn():
         dropout_rate=gnn_config["dropout_rate"]
     ).to(device)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=gnn_config["learning_rate"], weight_decay=1e-5)
+    optimizer = torch.optim.Adam(model.parameters(), lr=gnn_config["learning_rate"], weight_decay=1e-5) # help to prevent overfitting
     criterion = nn.BCEWithLogitsLoss()
 
     epochs = gnn_config["num_epochs"]

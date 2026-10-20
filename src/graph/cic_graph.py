@@ -33,7 +33,11 @@ def build_cicids_graphs(csv_path: str, output_dir: str, window_size: int = 50):
         'Flow Bytes/s',
         'FIN Flag Count',
         'SYN Flag Count',
-        'ACK Flag Count'
+        'ACK Flag Count',
+        'Flow Duration',
+        'Total Fwd Packets',
+        'Total Backward Packets',
+        'Fwd PSH Flags',
     ]
 
     # Enforce exact feature matching to prevent DataLoader crashes.
@@ -63,6 +67,22 @@ def build_cicids_graphs(csv_path: str, output_dir: str, window_size: int = 50):
         # 2. BUILD GRAPH TOPOLOGY (EDGES)
         edges = []
 
+        # Group flows from the same source IP
+        if 'Source IP' in window_df.columns:
+            for _, group in window_df.groupby('Source IP'):
+                indices = group.index.tolist()
+                if 1 < len(indices) <= 20:
+                    edges.extend(list(itertools.combinations(indices, 2)))
+                elif len(indices) > 20:
+                    edges.extend(list(zip(indices[:-1], indices[1:])))
+
+        # Group flows with same src-dst IP pair
+        if 'Source IP' in window_df.columns and 'Destination IP' in window_df.columns:
+            for _, group in window_df.groupby(['Source IP', 'Destination IP']):
+                indices = group.index.tolist()
+                if 1 < len(indices) <= 10:
+                    edges.extend(list(itertools.combinations(indices, 2)))
+
         if 'Destination Port' in window_df.columns:
             # Group flows targeting the same Destination Port
             for _, group in window_df.groupby('Destination Port'):
@@ -87,7 +107,8 @@ def build_cicids_graphs(csv_path: str, output_dir: str, window_size: int = 50):
             edge_index = torch.empty((2, 0), dtype=torch.long)
 
         # 3. GRAPH LABEL
-        graph_label = torch.tensor([1 if window_df['IsMalicious'].sum() > 0 else 0], dtype=torch.long)
+        #graph_label = torch.tensor([1 if window_df['IsMalicious'].sum() > 0 else 0], dtype=torch.long)
+        graph_label = torch.tensor([1 if window_df['IsMalicious'].mean() > 0.3 else 0],dtype=torch.long)
 
         # 4. SAVE
         graph_data = Data(x=x, edge_index=edge_index, y=graph_label)

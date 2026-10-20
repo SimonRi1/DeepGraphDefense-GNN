@@ -11,6 +11,7 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, precision_s
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
 from torch.utils.data import random_split
+from src.graph.feature_graph import EDGE_INDEX
 import warnings
 
 project_root = Path(__file__).resolve().parents[2]
@@ -87,44 +88,106 @@ def train_gan():
     
     print("\n--- [Phase 1/3] Dropout-GAN Training (on 80% Jan split) ---")
     generator = GraphGenerator(noise_dim=noise_dim, output_dim=input_dim).to(device)
-    discriminators = [GraphDiscriminator(input_dim=input_dim, hidden_dim=gnn_config["hidden_dim"], k=gnn_config["k"], dropout_rate=gnn_config["dropout_rate"]).to(device) for _ in range(5)]
-    
-    opt_g = torch.optim.Adam(generator.parameters(), lr=0.002)
-    opts_d = [torch.optim.Adam(d.parameters(), lr=0.001) for d in discriminators]
+    discriminators = [GraphDiscriminator(input_dim=input_dim, hidden_dim=gnn_config["hidden_dim"], k=gnn_config["k"], dropout_rate=gnn_config["dropout_rate"]).to(device) for _ in range(gan_config["num_discriminators"])]
+    logger = ExperimentLogger(experiment_name="gan_training", config=CONFIG)
+
+
+    opt_g = torch.optim.Adam(generator.parameters(), gan_config["lr_generator"])
+    opts_d = [torch.optim.Adam(d.parameters(), lr=gan_config["lr_discriminator"]) for d in discriminators]
     criterion_gan = torch.nn.BCEWithLogitsLoss()
     gan_epochs = gan_config["epochs"]
-    dropout_threshold = gan_config["dropout_rate"]
+    dropout_threshold = gan_config["dropout_threshold"]
     
     generator.train()
     for d in discriminators: d.train()
         
     for epoch in range(gan_epochs):
+        epoch_g_loss = 0.0
+        epoch_d_loss = 0.0
+        epoch_bots = 0
+        epoch_humans = 0
+        num_batches = 0
+
         pbar = tqdm(train_loader, desc=f"[Dropout-GAN] Epoch {epoch+1}/{gan_epochs}", unit="batch")
+        
         for batch in pbar:
             batch = batch.to(device)
             z = torch.randn(batch.num_graphs, noise_dim, device=device)
             fake_x = generator(z)
-            
+
+            # check num of nodes
+            assert fake_x.shape[0] == batch.num_graphs * 9, (
+                f"Shape mismatch nel generatore: "
+                f"fake_x ha {fake_x.shape[0]} nodi "
+                f"but the batch has {batch.num_graphs} graphs * 9 nodes = {batch.num_graphs * 9} expected nodes. "
+                f"Check if the graphs have the correct number of nodes."
+            )
+
+            num_graphs = batch.num_graphs
+            num_nodes_per_graph = 9
+            edge_indices = []
+            batch_vector = []
+
+            for i in range(num_graphs):
+                offset = i * num_nodes_per_graph
+                edge_indices.append(EDGE_INDEX + offset)
+                batch_vector.extend([i] * num_nodes_per_graph)
+
+            fake_edge_index = torch.cat(edge_indices, dim=1).to(device)
+            fake_batch_vector = torch.tensor(batch_vector, dtype=torch.long, device=device)
+
             active_d = []
             for i, disc in enumerate(discriminators):
                 if torch.rand(1).item() > dropout_threshold:
                     active_d.append((disc, opts_d[i]))
                     disc.zero_grad()
                     real_pred = disc(batch.x, batch.edge_index, batch.batch)
-                    fake_pred = disc(fake_x.detach(), batch.edge_index, batch.batch)
+                    fake_pred = disc(fake_x.detach(), fake_edge_index, fake_batch_vector)
                     loss_d = criterion_gan(real_pred, torch.ones_like(real_pred)) + criterion_gan(fake_pred, torch.zeros_like(fake_pred))
                     loss_d.backward()
                     opts_d[i].step()
                     
             if active_d:
                 opt_g.zero_grad()
-                loss_g = sum(criterion_gan(d(fake_x, batch.edge_index, batch.batch), torch.ones_like(fake_pred)) for d, _ in active_d) / len(active_d)
+                loss_g = sum(criterion_gan(d(fake_x, fake_edge_index, fake_batch_vector), torch.ones_like(fake_pred)) for d, _ in active_d) / len(active_d)
                 loss_g.backward()
                 opt_g.step()
                 
                 pbar.set_postfix(Loss_G=f"{loss_g.item():.4f}") 
             
-        print(f"[Dropout-GAN] Epoch [{epoch+1}/{gan_epochs}] completed.")
+            if active_d:
+                with torch.no_grad():
+                    ref_disc = active_d[0][0]
+                    fake_probs = torch.sigmoid(
+                        ref_disc(fake_x, fake_edge_index, fake_batch_vector)
+                    )
+                    bots_batch = (fake_probs > 0.5).sum().item()
+                    humans_batch = batch.num_graphs - bots_batch
+
+                    epoch_bots += bots_batch
+                    epoch_humans += humans_batch
+                    epoch_g_loss += loss_g.item()
+                    num_batches += 1
+
+                pbar.set_postfix(
+                    G=f"{loss_g.item():.4f}",
+                    ratio=f"{bots_batch}/{humans_batch}"
+                )
+            
+        avg_g_loss = epoch_g_loss / max(num_batches, 1)
+        avg_d_loss = epoch_d_loss / max(num_batches, 1)
+
+        ratio = logger.log_gan_epoch(
+            epoch=epoch + 1,
+            g_loss=avg_g_loss,
+            d_loss=avg_d_loss,
+            bots=epoch_bots,
+            humans=epoch_humans
+        )
+        
+        print(f"[Dropout-GAN] Epoch [{epoch+1}/{gan_epochs}] | "
+            f"G_loss={avg_g_loss:.4f} | "
+            f"ratio={epoch_bots}:{epoch_humans} ({ratio:.2f})")
         
     print("\n--- [Phase 2/3] Synthetic Data Generation ---")
     generator.eval()
@@ -161,7 +224,7 @@ def train_gan():
     print("\n--- [Phase 3/3] MFGraph Classifier Training ---")
     
     # Initialize ExperimentLogger exactly like GNN, MLP, and LGBM
-    logger = ExperimentLogger(experiment_name="gan_training", config=CONFIG)
+    #logger = ExperimentLogger(experiment_name="gan_training", config=CONFIG)
     exp_dir = logger.run_dir
     
     model = MFGraph(
@@ -172,7 +235,9 @@ def train_gan():
     ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
-    pos_weight = torch.tensor([2.0]).to(device) 
+    num_benign = sum(1 for g in augmented_train_dataset if g.y.item() == 0)
+    num_malware = sum(1 for g in augmented_train_dataset if g.y.item() == 1)
+    pos_weight = torch.tensor([num_benign / num_malware]).to(device)
     criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     
     best_val_f1 = 0.0
