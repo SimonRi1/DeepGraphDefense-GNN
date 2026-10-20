@@ -59,7 +59,8 @@ CONFIG = {
     },
 
     "nids": {
-        "input_dim":12
+        "input_dim":12,
+        "learning_rate": 0.002
     },
 
     # Max len of the feature vector for each node (for uniform padding)
