@@ -52,7 +52,7 @@ CONFIG = {
 
     "gan": {
         "epochs": 20,
-        "dropout_rate": 0.7
+        "dropout_threshold": 0.5
     },
 
     "nids": {
