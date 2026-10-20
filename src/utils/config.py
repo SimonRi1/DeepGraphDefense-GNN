@@ -38,7 +38,6 @@ CONFIG = {
 
     # --- MODEL SPECIFIC CONFIGURATIONS ---
 
-    # GNN Parameters
     "gnn": {
         "batch_size": 256,
         "learning_rate": 0.002,
