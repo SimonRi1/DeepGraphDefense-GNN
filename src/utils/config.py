@@ -52,7 +52,10 @@ CONFIG = {
 
     "gan": {
         "epochs": 20,
-        "dropout_threshold": 0.5
+        "dropout_threshold": 0.5,
+        "num_discriminators": 5,
+        "lr_generator": 0.002,
+        "lr_discriminator": 0.002   
     },
 
     "nids": {

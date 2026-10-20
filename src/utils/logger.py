@@ -44,3 +44,29 @@ class ExperimentLogger:
     def save_model_info(self, info: dict):
         with open(self.run_dir / "model_info.json", "w") as f:
             json.dump(info, f, indent=2)
+
+    def log_gan_epoch(self, epoch: int, g_loss: float, d_loss: float, bots: int, humans: int):
+        """
+        Traccia le metriche GAN per epoch.
+        Il bot_human_ratio è il segnale principale di mode collapse.
+        """
+        ratio = bots / max(humans, 1)
+        entry = {
+            "epoch": epoch,
+            "g_loss": round(g_loss, 4),
+            "d_loss": round(d_loss, 4),
+            "bots_generated": bots,
+            "humans_generated": humans,
+            "bot_human_ratio": round(ratio, 4),
+        }
+        
+        path = self.run_dir / "gan_metrics.csv"
+        write_header = not path.exists()
+        
+        with open(path, "a", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=entry.keys())
+            if write_header:
+                writer.writeheader()
+            writer.writerow(entry)
+        
+        return ratio
