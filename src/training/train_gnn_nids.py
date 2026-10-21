@@ -28,17 +28,25 @@ def train_nids_gnn():
     train_loader, val_loader, _ = get_nids_splits(data_dir, batch_size=128, seed=42)
     
     gnn_config = CONFIG["gnn"]
+    nids_config = CONFIG["nids"]
     
-    # FIX 1: Enforce input_dim=12 to match the new graph builder
+    all_labels = [data.y.item() for data in train_loader.dataset]
+    num_benign = sum(1 for l in all_labels if l == 0)
+    num_malicious = sum(1 for l in all_labels if l == 1)
+    pos_weight = torch.tensor([num_benign / num_malicious]).to(device)
+    print(f"Class distribution — Benign: {num_benign}, Malicious: {num_malicious}")
+    print(f"pos_weight: {pos_weight.item():.4f}")
+
+    # Enforce input_dim=12 to match the new graph builder
     model = MFGraph(
-        input_dim=12, 
+        input_dim=nids_config["input_dim"], 
         hidden_dim=gnn_config["hidden_dim"], 
         k=gnn_config["k"], 
         dropout_rate=gnn_config["dropout_rate"]
     ).to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3.0]).to(device))
+    optimizer = optim.Adam(model.parameters(), lr=nids_config["learning_rate"], weight_decay=1e-5)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     
     # Initialize Scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', patience=2, factor=0.5)

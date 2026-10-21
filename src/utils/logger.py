@@ -45,28 +45,19 @@ class ExperimentLogger:
         with open(self.run_dir / "model_info.json", "w") as f:
             json.dump(info, f, indent=2)
 
-    def log_gan_epoch(self, epoch: int, g_loss: float, d_loss: float, bots: int, humans: int):
+    def log_gan_epoch(self, epoch: int, metrics: dict):
         """
-        Traccia le metriche GAN per epoch.
-        Il bot_human_ratio è il segnale principale di mode collapse.
+        Track WGAN-GP metrics per epoch.
+        w_dist (critic's Wasserstein estimate) should shrink and stay stable;
+        feat_mean_gap is the mean absolute gap between real and fake feature means.
         """
-        ratio = bots / max(humans, 1)
-        entry = {
-            "epoch": epoch,
-            "g_loss": round(g_loss, 4),
-            "d_loss": round(d_loss, 4),
-            "bots_generated": bots,
-            "humans_generated": humans,
-            "bot_human_ratio": round(ratio, 4),
-        }
-        
+        entry = {"epoch": epoch, **{k: round(v, 4) for k, v in metrics.items()}}
+
         path = self.run_dir / "gan_metrics.csv"
         write_header = not path.exists()
-        
+
         with open(path, "a", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=entry.keys())
             if write_header:
                 writer.writeheader()
             writer.writerow(entry)
-        
-        return ratio

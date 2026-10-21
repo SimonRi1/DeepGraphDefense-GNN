@@ -38,7 +38,6 @@ CONFIG = {
 
     # --- MODEL SPECIFIC CONFIGURATIONS ---
 
-    # GNN Parameters
     "gnn": {
         "batch_size": 256,
         "learning_rate": 0.002,
@@ -52,10 +51,15 @@ CONFIG = {
 
     "gan": {
         "epochs": 20,
-        "dropout_threshold": 0.5,
-        "num_discriminators": 5,
-        "lr_generator": 0.002,
-        "lr_discriminator": 0.002   
+        "batch_size": 64,
+        "noise_dim": 64,
+        "dropout_threshold": 0.5,   # probability of dropping each critic (Dropout-GAN)
+        "num_discriminators": 3,
+        "n_critic": 5,              # critic steps per generator step (WGAN-GP)
+        "gp_lambda": 10.0,
+        "lr_generator": 1e-4,
+        "lr_discriminator": 1e-4,
+        "synthetic_ratio": 0.5      # synthetic malicious graphs, relative to real malicious count
     },
 
     "nids": {
