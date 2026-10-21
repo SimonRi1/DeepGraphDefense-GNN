@@ -50,7 +50,7 @@ def train_pe_baselines():
         "FFDNN-based": MLPClassifier(hidden_layer_sizes=(128, 64, 32), max_iter=500, random_state=42)
     }
     
-    out_dir = project_root / "experiments" / "PEbaselines_training"
+    out_dir = project_root / "experiments" / "pe_baselines_training"
     out_dir.mkdir(parents=True, exist_ok=True)
     
     print("\n[PE Baselines] Training and saving models...")

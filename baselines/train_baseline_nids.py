@@ -57,7 +57,7 @@ def train_and_save_baselines():
         "SVM": SVC(probability=True, random_state=42)
     }
 
-    baseline_dir = project_root / "experiments" / "NIDSbaselines_training"
+    baseline_dir = project_root / "experiments" / "nids_baselines_training"
     baseline_dir.mkdir(exist_ok=True, parents=True)
 
     print("\n[NIDS Baselines] Training and saving models...")
