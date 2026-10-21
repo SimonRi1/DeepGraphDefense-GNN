@@ -63,7 +63,7 @@ CONFIG = {
     },
 
     "nids": {
-        "input_dim":12,
+        "input_dim":16,
         "learning_rate": 0.002
     },
 
