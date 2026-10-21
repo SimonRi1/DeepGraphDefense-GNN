@@ -17,25 +17,30 @@ warnings.filterwarnings("ignore")
 
 class MFGraph(nn.Module):
     """
-    DGCNN (Deep Graph Convolutional Neural Network) with SortPooling.
+    DGCNN-style graph classifier with SortPooling, shared by the PE and NIDS detectors.
+
+    x -> 3 x GCNConv (outputs concatenated) -> SortPooling (top-k nodes)
+      -> learned weighted sum over the k nodes -> 3-layer MLP -> 1 logit
+
+    The model returns a raw logit: apply sigmoid for a probability, or train with
+    BCEWithLogitsLoss.
     """
     def __init__(self, input_dim: int, hidden_dim: int, k: int, dropout_rate: float):
         """
         Args:
             input_dim (int): Dimension of node features.
             hidden_dim (int): Number of hidden units in GCN layers.
-            k (int): The number of nodes to retain in SortPooling (default 9 for your PE graph).
+            k (int): Nodes kept by SortPooling. Graphs with fewer nodes (PE: 9) are zero-padded,
+                larger ones (NIDS: 500 flows) keep only the k highest-ranked nodes.
             dropout_rate (float): Dropout probability.
         """
         super(MFGraph, self).__init__()
         self.k = k
         
-        # Graph Convolutions layers - Convolutional Layers: 3.
+        # 1. Graph convolutions (3 layers; keep CONFIG["gnn"]["num_layers"] in sync)
         self.conv1 = GCNConv(input_dim, hidden_dim)
         self.conv2 = GCNConv(hidden_dim, hidden_dim)
         self.conv3 = GCNConv(hidden_dim, hidden_dim)
-        
-        #self.dropout = nn.Dropout(dropout_rate)
         
         # In DGCNN, the outputs of all GCN layers are concatenated. 
         # So the total feature dimension per node becomes hidden_dim * 3
@@ -43,7 +48,7 @@ class MFGraph(nn.Module):
         
         # 2. Graph Representation Learning - Remaining Layer
         # Implements E = f(W * Z^sp) where W is in R^{1 x k}
-        # A Linear layer applied across the k dimension precisely achieves this matrix multiplication
+        # A Linear layer applied across the k dimension implements this product
         self.w_conv = nn.Linear(self.k, 1)
         
         # 3. Classifier Module (Three-layer MLP)
@@ -56,7 +61,7 @@ class MFGraph(nn.Module):
         # Output layer
         self.fc3 = nn.Linear(mlp_hidden, 1)
         
-        # Dropout applied after every fully connected layer within the hidden layer
+        # Dropout after each hidden FC layer (the only regularisation in the model)
         self.dropout = nn.Dropout(p=dropout_rate)
 
     def forward(self, x, edge_index, batch):
@@ -71,14 +76,14 @@ class MFGraph(nn.Module):
         # Output shape: [num_nodes, total_latent_dim]
         z_concat = torch.cat([z1, z2, z3], dim=-1) 
         
-        # Sorts vertices in decreasing order based on the last channel and retains k nodes
+        # Sorts nodes by their last channel (descending) and keeps the top k per graph
         # Output shape: [batch_size, k * total_latent_dim]
         z_sp = global_sort_pool(z_concat, batch, self.k) 
         
         # Reshape and transpose to [batch_size, total_latent_dim, k] for W multiplication
         z_sp = z_sp.view(-1, self.k, z_concat.size(-1)).transpose(1, 2)
         
-        # Apply the parametrically represented single-channel Conv 1D layer
+        # Weighted sum over the k sorted nodes (equivalent to a 1-channel Conv1D of width k)
         # Output shape: [batch_size, total_latent_dim]
         e_g = F.relu(self.w_conv(z_sp)).squeeze(-1) 
         

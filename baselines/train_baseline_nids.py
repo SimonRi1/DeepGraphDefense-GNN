@@ -17,12 +17,15 @@ project_root = Path(__file__).resolve().parents[1]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from src.training.pe_dataset import PEGraphDataset
+from src.training.nids_dataset import get_nids_splits
 from src.utils.config import CONFIG
 warnings.filterwarnings("ignore")
 
 def graphs_to_tabular(dataloader):
-    """Collapses RAW NIDS time-window graphs into 1D vectors using mean pooling."""
+    """
+    Flattens each window graph into one vector (mean of its flow features), so the
+    baselines see the same information as the GNN except the graph structure.
+    """
     X, y = [], []
     for batch in tqdm(dataloader, desc="Flattening Graphs for Baselines", leave=False):
         pooled = global_mean_pool(batch.x, batch.batch)
@@ -31,22 +34,17 @@ def graphs_to_tabular(dataloader):
     return np.vstack(X), np.array(y)
 
 def train_and_save_baselines():
-    data_dir = CONFIG["cic_graphs_path"]
-    dataset = PEGraphDataset(str(data_dir))
-    
-    # 80/20 Split (Fixed seed for reproducible baseline comparison)
-    train_size = int(0.8 * len(dataset))
-    val_size = len(dataset) - train_size
-    generator = torch.Generator().manual_seed(42)
-    train_data, test_data = torch.utils.data.random_split(dataset, [train_size, val_size], generator=generator)
+    data_dir = project_root / CONFIG["cic_graphs_path"]
 
-    train_loader = DataLoader(train_data, batch_size=256, shuffle=False)
-    test_loader = DataLoader(test_data, batch_size=256, shuffle=False)
+    # Same chronological split as the NIDS GNN, so both are tested on the same unseen future windows
+    train_loader, _, _ = get_nids_splits(data_dir, batch_size=256, seed=42)
+    train_loader = DataLoader(train_loader.dataset, batch_size=256, shuffle=False)
 
-    print(f"\n[NIDS Baselines] Processing {len(dataset)} graphs for NIDS baselines...")
+    print(f"\n[NIDS Baselines] Processing {len(train_loader.dataset)} training graphs for NIDS baselines...")
     X_train_raw, y_train = graphs_to_tabular(train_loader)
 
-    # Apply log1p scaling for training
+    # Node features are already log1p-scaled by cic_graph.py, so this is a second log1p.
+    # The evaluation scripts apply the same transform, so train and test stay consistent.
     X_train_scaled = np.log1p(np.clip(X_train_raw, a_min=0.0, a_max=None))
 
     models = {
@@ -65,7 +63,7 @@ def train_and_save_baselines():
         print(f" -> Training {name}...")
         model.fit(X_train_scaled, y_train)
         
-        # Save model to disk so adversarial evaluation can load it
+        # Saved as joblib for the drift / adversarial evaluation scripts (name must match there)
         model_filename = baseline_dir / f"{name.replace(' ', '_').replace('(', '').replace(')', '')}.joblib"
         joblib.dump(model, model_filename)
 

@@ -9,16 +9,22 @@ from collections import defaultdict
 
 def get_nids_splits(data_dir: Path, batch_size: int = 128, seed: int = 42):
     """
-    Implements Temporal and Spatial bias mitigation.
-    Bypasses random shuffling to perform a strict chronological 
-    split within each distinct traffic day/scenario.
+    Chronological 80/10/10 split of the NIDS window graphs, applied separately to
+    every capture file (scenario), so each attack type appears in train/val/test
+    and test windows are always later in time than training windows.
+
+    Avoids the temporal leakage of a random split: adjacent windows of the same
+    capture are almost identical, so a random split would test on near-copies
+    of training samples.
+
+    `seed` is unused (the split is deterministic); kept for API compatibility.
     """
     dataset = PEGraphDataset(str(data_dir))
     
     # Sort files to guarantee chronological order (window_0000, window_0001...)
     files = sorted([f for f in os.listdir(data_dir) if f.endswith('.pt')])
     
-    # Group by Spatial/Scenario Bias (e.g., 'Friday-WorkingHours-Afternoon-DDos')
+    # Group windows by capture file (e.g. 'Friday-WorkingHours-Afternoon-DDos.pcap_ISCX')
     scenario_groups = defaultdict(list)
     for idx, f in enumerate(files):
         scenario_name = f.split('_window_')[0]
@@ -45,7 +51,7 @@ def get_nids_splits(data_dir: Path, batch_size: int = 128, seed: int = 42):
     val_data = Subset(dataset, val_indices)
     test_data = Subset(dataset, test_indices)
     
-    # Shuffle train batches for gradient stability, but maintain chronological integrity for Val/Test
+    # Only training batches are shuffled; val/test keep chronological order
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4, persistent_workers=True)
     val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False, num_workers=4, persistent_workers=True)
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False)

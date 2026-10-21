@@ -19,12 +19,18 @@ from src.utils.logger import ExperimentLogger
 from src.utils.config import CONFIG
 
 def train_nids_gnn():
+    """
+    Trains the NIDS MFGraph on the chronological split of the CIC-IDS-2017 window graphs.
+    Class imbalance is handled with pos_weight; the best-validation-AUC weights are
+    saved as model_gnn.pth and per-epoch metrics as nids_training_metrics.csv.
+    """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"\n[NIDS Training] Using device: {device}")
 
+    # Relative path: run from the project root (python orchestrator.py -t train_nids_gnn)
     data_dir = CONFIG["cic_graphs_path"]
 
-    # REPLACED random_split with the chronological temporal splitter
+    # Chronological per-scenario split, shared with the baselines and evaluation scripts
     train_loader, val_loader, _ = get_nids_splits(data_dir, batch_size=128, seed=42)
     
     gnn_config = CONFIG["gnn"]
@@ -33,6 +39,7 @@ def train_nids_gnn():
     all_labels = [data.y.item() for data in train_loader.dataset]
     num_benign = sum(1 for l in all_labels if l == 0)
     num_malicious = sum(1 for l in all_labels if l == 1)
+    # Malicious windows are the minority: weight positives by benign/malicious ratio
     pos_weight = torch.tensor([num_benign / num_malicious]).to(device)
     print(f"Class distribution — Benign: {num_benign}, Malicious: {num_malicious}")
     print(f"pos_weight: {pos_weight.item():.4f}")
@@ -50,7 +57,7 @@ def train_nids_gnn():
     optimizer = optim.Adam(model.parameters(), lr=nids_config["learning_rate"], weight_decay=1e-5)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     
-    # Initialize Scheduler
+    # Halve the LR when validation AUC stops improving for 2 epochs
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', patience=2, factor=0.5)
     
     logger = ExperimentLogger(experiment_name="nids_gnn_training", config=CONFIG)
@@ -71,12 +78,12 @@ def train_nids_gnn():
             batch = batch.to(device)
             optimizer.zero_grad()
             
-            # FIX 2: Removed double-scaling (log1p). The graph builder already scaled the data.
+            # Node features are already log1p-scaled by cic_graph.py: no extra scaling here
             logits = model(batch.x, batch.edge_index, batch.batch).squeeze(-1)
             loss = criterion(logits, batch.y.float())
             
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)  # stabilises early epochs
             optimizer.step()
             train_loss += loss.item()
             
@@ -87,7 +94,6 @@ def train_nids_gnn():
             for batch in val_loader:
                 batch = batch.to(device)
 
-                # Use batch.x directly without scaling again
                 logits = model(batch.x, batch.edge_index, batch.batch).squeeze(-1)
                 
                 probs = torch.sigmoid(logits).cpu().numpy()
@@ -109,7 +115,6 @@ def train_nids_gnn():
             "Val_AUC": val_auc
         })
         
-        # FIX 3: Step the scheduler to reduce learning rate if metrics plateau
         scheduler.step(val_auc)
         
         # Save best weights
@@ -118,7 +123,7 @@ def train_nids_gnn():
             best_weights = copy.deepcopy(model.state_dict())
             print(f"  --> [*] New best model saved! (AUC: {best_auc:.4f})")
 
-    # FIX 4: Restore best weights before final save
+    # Keep the best-AUC epoch, not the last one
     print(f"\n[Training Complete] Restoring best weights (Peak AUC: {best_auc:.4f})")
     model.load_state_dict(best_weights)
 

@@ -27,6 +27,11 @@ torch.serialization.add_safe_globals([GlobalStorage, DataEdgeAttr, DataTensorAtt
 warnings.filterwarnings("ignore")
 
 def train_gnn():
+    """
+    Trains the PE MFGraph on January 2018 EMBER graphs (80/20 random split).
+    The checkpoint with the best validation F1 is saved as best_gnn_model.pth;
+    the later months (test/02..12) are left untouched for the concept-drift evaluation.
+    """
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Training on device: {device}")
 
@@ -36,7 +41,7 @@ def train_gnn():
     print("\n[Data] Loading January 2018 dataset (Training set)...")
     full_jan_dataset = PEGraphDataset(graphs_dir / "train")
     
-    # 1. Implement strictly internal 80/20 split on January data
+    # 1. 80/20 split of January only (unseeded: the split changes between runs)
     train_size = int(0.8 * len(full_jan_dataset))
     val_size = len(full_jan_dataset) - train_size
     train_data, val_data = random_split(full_jan_dataset, [train_size, val_size])
@@ -61,7 +66,7 @@ def train_gnn():
         dropout_rate=gnn_config["dropout_rate"]
     ).to(device)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=gnn_config["learning_rate"], weight_decay=1e-5) # help to prevent overfitting
+    optimizer = torch.optim.Adam(model.parameters(), lr=gnn_config["learning_rate"], weight_decay=1e-5)  # light L2 regularisation
     criterion = nn.BCEWithLogitsLoss()
 
     epochs = gnn_config["num_epochs"]
@@ -114,12 +119,13 @@ def train_gnn():
         val_prec = precision_score(all_labels, binary_preds, zero_division=0)
         val_rec = recall_score(all_labels, binary_preds, zero_division=0)
         
-        # Track the best model
+        # Model selection on validation F1 (the NIDS and GAN scripts use AUC instead)
         if val_f1 > best_val_f1:
             best_val_f1 = val_f1
             best_model_weights = copy.deepcopy(model.state_dict())
             print(f"  -> New best validation F1 score: {best_val_f1:.4f}")
         
+        # "test_loss" is the validation loss (column name kept for the notebooks / logger)
         metrics = {
             "train_loss": train_loss,
             "test_loss": val_loss,

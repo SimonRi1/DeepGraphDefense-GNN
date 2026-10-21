@@ -18,6 +18,10 @@ warnings.filterwarnings("ignore")
 
 
 def train_gan():
+    """
+    PE GAN pipeline: trains on January 2018 (80/20 seeded split) and scores the
+    final classifier separately on every later month (concept_drift.csv).
+    """
     graphs_dir = project_root / CONFIG["ember_graphs_path"]
     batch_size = gnn_config["batch_size"]
 

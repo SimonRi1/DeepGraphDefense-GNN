@@ -15,6 +15,7 @@ warnings.filterwarnings("ignore")
 
 
 def train_gan():
+    """NIDS GAN pipeline on the same chronological split used by the NIDS GNN."""
     data_dir = project_root / CONFIG["cic_graphs_path"]
 
     # Chronological per-scenario split (past / near-future / distant-future)

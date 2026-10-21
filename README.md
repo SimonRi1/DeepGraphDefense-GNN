@@ -422,20 +422,20 @@ All models were trained and evaluated on the following machine:
 
 Wall-clock time for a single run of each task, using the default configuration in [src/utils/config.py](src/utils/config.py).
 
-| Task (`orchestrator.py -t`) | Model / Step                         | Epochs | Device | Execution time |
-|-----------------------------|--------------------------------------|--------|--------|----------------|
-| `ember_graph`               | EMBER → MFGraph construction         | –      |        |                |
-| `build_cicids`              | CIC-IDS2017 → flow graph construction | –      |        |                |
-| `train_pe_gnn`                 | GNN PE (DGCNN)                       | 20     |        |                |
-| `train_pe_gan`                 | GAN PE (Dropout-WGAN-GP + classifier) | 20     |        |                |
-| `train_pe_baselines`        | PE baselines (LR, DT, SVM, MLP, FFDNN) | –      |        |                |
-| `train_nids_gnn`                | GNN NIDS (DGCNN)                     |        |        |                |
-| `train_nids_gan`            | GAN NIDS (Dropout-WGAN-GP + classifier) | 20     |        |                |
-| `train_nids_baselines`      | NIDS baselines (LR, DT, SVM, MLP, FFDNN) | –      |        |                |
-| `eval_drift`                | Concept drift evaluation             | –      |        |                |
-| `eval_pe_adversarial`       | PE adversarial evaluation            | –      |        |                |
-| `eval_nids_adversarial`     | NIDS adversarial evaluation          | –      |        |                |
-| `unified_pipeline`          | Unified defense-in-depth simulation  | –      |        |                |
+| Task (`orchestrator.py -t`) | Model / Step                         | Execution time |
+|-----------------------------|--------------------------------------|----------------|
+| `ember_graph`               | EMBER → MFGraph construction         |                |
+| `build_cicids`              | CIC-IDS2017 → flow graph construction |                |
+| `train_pe_gnn`              | GNN PE (DGCNN)                       |                |
+| `train_pe_gan`              | GAN PE (Dropout-WGAN-GP + classifier)|                |
+| `train_pe_baselines`        | PE baselines (LR, DT, SVM, MLP, FFDNN)|     14m 14s    |
+| `train_nids_gnn`            | GNN NIDS (DGCNN)                     |     3m 21s     |
+| `train_nids_gan`            | GAN NIDS (Dropout-WGAN-GP + classifier) |     10m 46s    |
+| `train_nids_baselines`      | NIDS baselines (LR, DT, SVM, MLP, FFDNN) |     21s        |
+| `eval_drift`                | Concept drift evaluation             |                |
+| `eval_pe_adversarial`       | PE adversarial evaluation            |                |
+| `eval_nids_adversarial`     | NIDS adversarial evaluation          |                |
+| `unified_pipeline`          | Unified defense-in-depth simulation  |                |
 
 ---
 

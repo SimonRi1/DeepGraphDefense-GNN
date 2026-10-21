@@ -1,3 +1,8 @@
+"""
+NIDS evasion test: scales one flow feature (packet size or inter-arrival time) of the
+test windows and measures how the GNN and the tabular baselines degrade.
+Scale 1.0x is the clean reference. Output: experiments/nids_adversarial/*.csv
+"""
 import sys
 import os
 from pathlib import Path
@@ -24,7 +29,7 @@ if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 from src.models.gnn import MFGraph
-from src.training.pe_dataset import PEGraphDataset
+from src.training.nids_dataset import get_nids_splits
 from src.utils.config import CONFIG
 
 
@@ -122,21 +127,13 @@ def evaluate_nids_adversarial():
     print(f"========================================================")
     print(f"[Info] Running on device: {device}")
     
-    # 1. Load NIDS Test Data
-    nids_test_path = project_root / "data" / "graphs" / "nids_graphs"
-    if not nids_test_path.exists():
-        raise FileNotFoundError(f"NIDS graph data not found at {nids_test_path}")
-        
-    dataset = PEGraphDataset(str(nids_test_path))
-    print(f"[Info] Total NIDS graphs loaded: {len(dataset)}")
-    
-    # Use 20% test split (matching training split seed 42)
-    test_size = int(0.2 * len(dataset))
-    train_size = len(dataset) - test_size
-    generator = torch.Generator().manual_seed(42)
-    _, test_data = torch.utils.data.random_split(dataset, [train_size, test_size], generator=generator)
-    
-    test_loader = DataLoader(test_data, batch_size=256, shuffle=False)
+    # 1. Load NIDS Test Data (chronological split: the GNN and baselines never saw these windows)
+    nids_dir = project_root / CONFIG["cic_graphs_path"]
+    if not nids_dir.exists():
+        raise FileNotFoundError(f"NIDS graph data not found at {nids_dir}")
+
+    _, _, test_loader = get_nids_splits(nids_dir, batch_size=256, seed=42)
+    print(f"[Info] NIDS test graphs (future split): {len(test_loader.dataset)}")
     X_raw_test, y_true = graphs_to_tabular(test_loader)
     
     # 2. Load Models
@@ -156,7 +153,11 @@ def evaluate_nids_adversarial():
     if not baselines:
         raise FileNotFoundError(f"No pre-trained NIDS baseline models found in {baseline_dir}. Run baseline training first.")
 
-    # 3. Define Attacks Configuration
+    # 3. Attack configuration: each attack multiplies one flow feature by `scale`
+    #    (feat_idx follows feature_cols in src/graph/cic_graph.py).
+    #    Graph features are already log1p-scaled, so the GNN receives scale * log1p(f),
+    #    while baselines receive log1p(scale * pooled features): the two perturbations
+    #    are not identical, keep this in mind when comparing GNN vs baselines.
     Psize_scales = [1.0, 0.8, 0.5, 0.1, 2.0, 5.0]
     IAtime_scales = [1.0, 2.0, 5.0, 10.0]
     attacks = {
@@ -241,7 +242,7 @@ def evaluate_nids_adversarial():
         print(df_f1.round(4))
         
         print("\n" + "="*50)
-        print(f"    MALWARE RECALL DEGRADATION: {attack_name.replace('_', ' ')}")
+        print(f"    ATTACK RECALL DEGRADATION: {attack_name.replace('_', ' ')}")
         print("="*50)
         print(df_rec.round(4))
         print(f"\n[Success] All results exported to {out_dir}")

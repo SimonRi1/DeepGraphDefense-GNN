@@ -1,3 +1,14 @@
+"""
+Single entry point for the whole pipeline: python orchestrator.py -t <task>
+
+Typical order:
+  build_cicids / ember_graph               -> graphs in data/graphs/
+  train_pe_gnn, train_nids_gnn             -> MFGraph detectors
+  train_pe_gan, train_nids_gan             -> GAN-augmented detectors + PE generator
+  train_pe_baselines, train_nids_baselines -> classical ML on pooled graph features
+  eval_drift, eval_pe_adversarial, eval_nids_adversarial, unified_pipeline, plot_metrics
+Every task writes its artefacts under experiments/ (see notebooks/ for the analysis).
+"""
 import sys
 from pathlib import Path
 import torch
@@ -10,12 +21,13 @@ from src.utils.config import CONFIG
 from src.graph.ember_graph import ember_graph_building
 
 def run_pe_extraction():
+    """
+    Builds PE graphs from the raw binaries in CONFIG["PEsamples_path"] (label 1 if the
+    path contains a 'malware' folder). Used for demo samples; EMBER graphs come from ember_graph.
+    """
     from tqdm import tqdm
     from src.features.pe_extractor import PEFeatureExtractor
     from src.graph.feature_graph import FeatureGraphBuilder
-    """
-    Executes the feature extraction and graph building pipeline.
-    """
     print("\n--- Starting PE Feature Extraction ---")
     extractor = PEFeatureExtractor()
     builder = FeatureGraphBuilder()

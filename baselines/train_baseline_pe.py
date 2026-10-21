@@ -20,6 +20,7 @@ from src.training.pe_dataset import PEGraphDataset
 from src.utils.config import CONFIG
 
 def extract_flat_features(loader):
+    """Mean over the 9 PE nodes -> one 512-dim vector per file (graph structure removed)."""
     X, y = [], []
     for data in loader:
         X.append(data.x.mean(dim=0).numpy())
@@ -33,7 +34,7 @@ def train_pe_baselines():
     pe_train_path = graphs_dir / "train" 
     pe_dataset = PEGraphDataset(str(pe_train_path))
     
-    # avoiding RAM saturation
+    # Only the first 10k January graphs (filesystem order) to keep SVM/KNN training tractable
     subset_size = min(10000, len(pe_dataset)) 
     pe_subset = torch.utils.data.Subset(pe_dataset, range(subset_size))
     pe_loader = DataLoader(pe_subset, batch_size=1, shuffle=True)

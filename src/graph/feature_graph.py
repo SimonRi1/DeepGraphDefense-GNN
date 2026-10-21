@@ -12,8 +12,8 @@ if str(project_root) not in sys.path:
 
 from src.utils.config import CONFIG
 
-# Topology from Fig 2 of the paper
-# Follow the config's file order for the features
+# Fixed PE graph topology (same for every file), adapted from the feature-graph
+# figure of the MFGraph reference paper. Node indices follow CONFIG["feature_names"]:
 # 0="general", 1="header", 2="imported", 3="exported",
 # 4="section", 5="byte_histogram", 6="byte_entropy",
 # 7="data_directories", 8="string"
@@ -31,7 +31,7 @@ EDGE_INDEX = torch.tensor([
     [8, 1]
 ], dtype=torch.long).t().contiguous()
 
-# bidirectional edges
+# GCNConv treats edge_index as directed: add the reverse edges to make it undirected
 EDGE_INDEX = torch.cat([
     EDGE_INDEX,
     EDGE_INDEX.flip(0)
@@ -61,8 +61,9 @@ class FeatureGraphBuilder:
                 vec = torch.tensor(vec, dtype=torch.float32)
             node_features.append(torch.tensor(vec, dtype=torch.float32))
 
-        # Uniform-length padding (the longest node determines the dimension)
-        GLOBAL_MAX_LEN = CONFIG.get("max_feature_len", 2381) # Fallback if not in config
+        # Every node must have the same length to be stacked into x: zero-pad (or truncate)
+        # to the fixed max_feature_len, which becomes the PE GNN input_dim.
+        GLOBAL_MAX_LEN = CONFIG.get("max_feature_len", 2381)
         
         for i in range(len(node_features)):
             current_len = node_features[i].shape[0]
@@ -75,7 +76,8 @@ class FeatureGraphBuilder:
 
         x = torch.stack(node_features)  # shape: [9, GLOBAL_MAX_LEN]
         
-        # L2 Normalization
+        # Per-node L2 normalisation: families with huge raw values (sizes, timestamps)
+        # would otherwise dominate the GCN aggregation
         x = torch.nn.functional.normalize(x, p=2.0, dim=-1)
 
         return Data(

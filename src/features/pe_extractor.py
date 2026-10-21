@@ -13,9 +13,12 @@ from src.utils.config import CONFIG
 
 class PEFeatureExtractor:
     """
-    Extraction of the 9 feature from a PE binary using LIEF.
-    Output: Separated features for the building of the feature graph
-    Note: No concatenation of the feature (EMBER approach)
+    Extracts the 9 static feature families from a raw PE binary with LIEF.
+
+    Unlike EMBER, which concatenates everything into one 2381-dim vector, each family
+    is returned separately because it becomes its own node in the feature graph.
+    The layout must match EmberFeatureParser, so that graphs built from real
+    binaries and from the EMBER .jsonl files are interchangeable.
     """
 
     def extract(self, pe_path: str) -> dict | None:
@@ -87,7 +90,7 @@ class PEFeatureExtractor:
         if not sections:
             return np.zeros(CONFIG["section_dim"], dtype=np.float32)
         features = []
-        for sec in sections[:CONFIG["section_max"]]:  # max 5 section
+        for sec in sections[:CONFIG["section_max"]]:  # first section_max sections, 3 values each
             features.extend([
                 sec.virtual_size,
                 sec.size,
@@ -146,17 +149,23 @@ class PEFeatureExtractor:
         lengths = [len(s) for s in strings]
         return np.array([
             len(strings),                    # Strings total number
-            np.mean(lengths),                # avarage length
+            np.mean(lengths),                # average length
             np.std(lengths),                 # standard deviation
-            max(lengths),                    # longer string
+            max(lengths),                    # longest string
             sum(1 for s in strings if '\\' in s),   # path-like
             sum(1 for s in strings if '://' in s),  # URL-like
         ], dtype=np.float32)
     
 class EmberFeatureParser:
     """
-    Parses EMBER's raw jsonl schema into the exact same per-group array format
-    as PEFeatureExtractor, allowing seamless integration with FeatureGraphBuilder.
+    Parses EMBER's raw .jsonl schema into the same per-family arrays as
+    PEFeatureExtractor, so both feed FeatureGraphBuilder.
+
+    Known differences from PEFeatureExtractor (EMBER does not store these values):
+      - string: std and max length are always 0
+      - byte_histogram: EMBER stores raw counts, PEFeatureExtractor frequencies
+        (equivalent after the L2 normalisation in FeatureGraphBuilder)
+      - byte_entropy: EMBER's 16x16 entropy/byte histogram, not the sliding-window entropies
     """
 
     def parse(self, sample: dict) -> dict:

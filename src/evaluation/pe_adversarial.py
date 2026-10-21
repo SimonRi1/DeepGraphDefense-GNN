@@ -1,3 +1,8 @@
+"""
+PE evasion test: malware test graphs are moved towards GAN-generated malware variants
+(x' = x + scale * (G(z) - x)), benign graphs are untouched, so recall is the key metric.
+Scale 0.0 is the clean reference. Output: experiments/pe_adversarial/*.csv
+"""
 import sys
 import os
 from pathlib import Path
@@ -102,41 +107,34 @@ def load_pe_gnn(device):
 
 
 def load_pe_gan(device):
-    """Loads the trained GAN Generator if available."""
+    """
+    Loads the trained PE GraphGenerator (generator.pth) from the latest GAN run.
+    Architecture sizes and the feature range are recovered from the state dict.
+    """
     gan_dir = project_root / CONFIG["experiments_path"] / "pe_gan_training"
-    if not gan_dir.exists():
-        print(f"[PE Adversarial] GAN folder not found at {gan_dir}. Using variance-scaled perturbation.")
-        return None
-        
-    checkpoints = list(gan_dir.rglob("*.pth")) + list(gan_dir.rglob("*.pt"))
+    checkpoints = list(gan_dir.rglob("generator.pth")) if gan_dir.exists() else []
     if not checkpoints:
-        print("[PE Adversarial] No GAN checkpoint found. Using variance-scaled perturbation.")
+        print(f"[PE Adversarial] WARNING: no generator.pth in {gan_dir}. Falling back to Gaussian noise.")
         return None
-        
-    gen_ckpts = [c for c in checkpoints if "gen" in c.name.lower()]
-    chosen_ckpt = max(gen_ckpts, key=lambda f: f.stat().st_mtime) if gen_ckpts else max(checkpoints, key=lambda f: f.stat().st_mtime)
-    
-    try:
-        from src.models.gan import Generator
-        generator = Generator(input_dim=512, noise_dim=128).to(device)
-        loaded = torch.load(chosen_ckpt, map_location=device)
-        
-        if isinstance(loaded, dict):
-            if "generator_state_dict" in loaded:
-                generator.load_state_dict(loaded["generator_state_dict"])
-            elif "generator" in loaded:
-                generator.load_state_dict(loaded["generator"])
-            else:
-                generator.load_state_dict(loaded)
-        else:
-            generator.load_state_dict(loaded)
-            
-        generator.eval()
-        print(f"[PE Adversarial] Successfully loaded GAN Generator from: {chosen_ckpt.name}")
-        return generator
-    except Exception as e:
-        print(f"[PE Adversarial] Could not load GAN ({e}). Falling back to variance-scaled perturbation.")
-        return None
+
+    gen_path = max(checkpoints, key=lambda f: f.stat().st_mtime)
+    state = torch.load(gen_path, map_location=device)
+
+    from src.models.gan import GraphGenerator
+    num_nodes, hidden_dim = state["pos_emb.weight"].shape
+    feat_min = state["feat_min"]
+    generator = GraphGenerator(
+        noise_dim=state["inp.weight"].shape[1] // 2,
+        output_dim=state["out.weight"].shape[0],
+        num_nodes=num_nodes,
+        feat_min=feat_min,
+        feat_max=feat_min + state["feat_range"],
+        hidden_dim=hidden_dim,
+    ).to(device)
+    generator.load_state_dict(state)
+    generator.eval()
+    print(f"[PE Adversarial] Loaded GAN generator from: {gen_path.parent.name}/{gen_path.name}")
+    return generator
 
 
 def extract_flat_features(loader):
@@ -149,36 +147,37 @@ def extract_flat_features(loader):
     return np.array(X, dtype=np.float32), np.array(y, dtype=np.int32)
 
 
-def apply_adversarial_perturbation(X_malware, generator, scale, device):
+def load_graphs(loader):
+    """Materialises the evaluation subset once so every scale perturbs the same graphs."""
+    graphs = [data for data in loader]
+    labels = np.array([int(g.y.item()) for g in graphs], dtype=np.int32)
+    return graphs, labels
+
+
+@torch.no_grad()
+def perturb_graph(data, generator, scale, device):
     """
-    Applies adversarial evasion noise.
-    Scales perturbation against feature variance so values reliably cross decision thresholds.
+    Returns a copy of a malicious graph with perturbed node features.
+      - GAN mode:   interpolates towards a GAN-generated malware variant on the same
+                    topology, x' = x + scale * (G(z) - x), kept inside the real feature range.
+      - Noise mode: Gaussian noise scaled by the per-feature std across nodes (fallback).
     """
-    if scale == 0.0 or len(X_malware) == 0:
-        return X_malware.copy()
-        
-    n_samples, n_features = X_malware.shape
-    
-    feature_std = np.std(X_malware, axis=0, keepdims=True)
-    feature_std[feature_std < 1e-4] = 1.0  # Avoid zero variance
-    
-    noise = None
+    adv = data.clone()
+    x = data.x.to(device)
     if generator is not None:
-        try:
-            with torch.no_grad():
-                z = torch.randn(n_samples, 128, device=device)
-                gen_out = generator(z)
-                noise = gen_out.cpu().numpy()
-        except Exception:
-            noise = None
-            
-    if noise is None:
-        rng = np.random.RandomState(42 + int(scale * 100))
-        noise = rng.normal(loc=0.0, scale=1.0, size=(n_samples, n_features))
-        
-    # Scale perturbation: 0.25x -> 0.5 std dev, 1.0x -> 2.0 std dev shift
-    perturbation = noise * feature_std * (scale * 2.0)
-    return X_malware + perturbation
+        batch = torch.zeros(x.size(0), dtype=torch.long, device=device)
+        fake = generator(data.edge_index.to(device), batch)
+        adv_x = x + scale * (fake - x)
+        lo, hi = generator.feat_min, generator.feat_min + generator.feat_range
+        if lo.size(0) > 1:
+            lo, hi = lo[:x.size(0)], hi[:x.size(0)]
+        adv_x = torch.max(torch.min(adv_x, hi), lo)
+    else:
+        node_std = x.std(dim=0, keepdim=True)
+        node_std[node_std < 1e-4] = 1.0
+        adv_x = (x + torch.randn_like(x) * node_std * (scale * 2.0)).clamp(min=0.0)
+    adv.x = adv_x.cpu()
+    return adv
 
 
 def evaluate_pe_adversarial():
@@ -214,7 +213,7 @@ def evaluate_pe_adversarial():
     pe_subset = torch.utils.data.Subset(pe_dataset, indices[:subset_size])
     pe_loader = DataLoader(pe_subset, batch_size=1, shuffle=False)
     
-    X_flat, y_true = extract_flat_features(pe_loader)
+    graphs, y_true = load_graphs(pe_loader)
     malware_mask = (y_true > 0.5)
     print(f"[Info] Sample split -> Malware: {np.sum(malware_mask)} | Benign: {len(y_true) - np.sum(malware_mask)}")
     
@@ -240,16 +239,24 @@ def evaluate_pe_adversarial():
     perturbation_scales = [0.0, 0.25, 0.5, 0.75, 1.0]
     records = []
 
+    attack_mode = "GAN" if gan_gen is not None else "Gaussian"
+    X_clean, _ = extract_flat_features(pe_loader)
+    torch.manual_seed(42)
+
     for scale in perturbation_scales:
-        print(f"\n[Testing Intensity: {scale}x]")
+        print(f"\n[Testing Intensity: {scale}x | Mode: {attack_mode}]")
         
-        # Perturb malware features only (simulating evasion attempt)
-        X_test_adv = X_flat.copy()
-        if scale > 0.0 and np.any(malware_mask):
-            X_test_adv[malware_mask] = apply_adversarial_perturbation(
-                X_flat[malware_mask], gan_gen, scale, device
-            )
-            delta = np.mean(np.abs(X_test_adv[malware_mask] - X_flat[malware_mask]))
+        # Perturb malware graphs only (simulating evasion attempt); every model sees the same graphs
+        if scale > 0.0:
+            adv_graphs = [perturb_graph(g, gan_gen, scale, device) if mal else g
+                          for g, mal in zip(graphs, malware_mask)]
+        else:
+            adv_graphs = graphs
+        adv_loader = DataLoader(adv_graphs, batch_size=1, shuffle=False)
+        X_test_adv, _ = extract_flat_features(adv_loader)
+
+        if scale > 0.0:
+            delta = np.mean(np.abs(X_test_adv[malware_mask] - X_clean[malware_mask]))
             print(f" -> Active Feature Shift Delta: {delta:.4f}")
         else:
             print(f" -> Baseline (Clean Data)")
@@ -269,44 +276,27 @@ def evaluate_pe_adversarial():
             records.append({
                 "Intensity": f"{scale}x",
                 "Scale": scale,
+                "Mode": attack_mode,
                 "Model": name,
                 **metrics
             })
 
-        # Evaluate GNN (MFGraph)
+        # Evaluate GNN (MFGraph) on the same perturbed graphs
         gnn_probs = []
         with torch.no_grad():
-            for i, data in enumerate(pe_loader):
-                is_mal = (y_true[i] > 0.5)
-                
-                if is_mal and scale > 0.0:
-                    node_std = data.x.std(dim=0, keepdim=True)
-                    node_std[node_std < 1e-4] = 1.0
-                    
-                    if gan_gen is not None:
-                        try:
-                            z = torch.randn(data.x.size(0), 128, device=device)
-                            adv_noise = gan_gen(z)
-                        except Exception:
-                            adv_noise = torch.randn_like(data.x)
-                    else:
-                        adv_noise = torch.randn_like(data.x)
-                        
-                    adv_x = data.x + adv_noise.to(data.x.device) * node_std * (scale * 2.0)
-                else:
-                    adv_x = data.x
-                    
-                out = gnn_model(adv_x.to(device), data.edge_index.to(device), None)
-                prob = torch.sigmoid(out.view(-1)).mean().item()
-                gnn_probs.append(prob)
+            for batch in DataLoader(adv_graphs, batch_size=64, shuffle=False):
+                batch = batch.to(device)
+                out = gnn_model(batch.x, batch.edge_index, batch.batch)
+                gnn_probs.append(torch.sigmoid(out.view(-1)).cpu().numpy())
 
-        gnn_probs = np.array(gnn_probs)
+        gnn_probs = np.concatenate(gnn_probs)
         gnn_preds = (gnn_probs >= 0.5).astype(int)
         gnn_metrics = compute_all_metrics(y_true, gnn_preds, gnn_probs)
         
         records.append({
             "Intensity": f"{scale}x",
             "Scale": scale,
+            "Mode": attack_mode,
             "Model": "GNN (MFGraph)",
             **gnn_metrics
         })

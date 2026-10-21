@@ -5,6 +5,11 @@ from pathlib import Path
 
 
 class ExperimentLogger:
+    """
+    Creates experiments/<experiment_name>/<YYYYmmdd_HHMMSS>/ for one run, saves the
+    config there and appends metrics to CSV files as training progresses
+    (rows are flushed every epoch, so a crashed run still keeps its history).
+    """
     def __init__(self, experiment_name: str, config: dict, base_dir: str = "experiments"):
         self.run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.run_dir = Path(base_dir) / experiment_name / self.run_id
@@ -14,7 +19,7 @@ class ExperimentLogger:
         with open(self.run_dir / "config.json", "w") as f:
             json.dump(config, f, indent=2)
 
-        print(f"[Logger] Run salvata in: {self.run_dir}")
+        print(f"[Logger] Run saved to: {self.run_dir}")
 
     def log_epoch(self, epoch: int, metrics: dict):
         entry = {"epoch": epoch, **metrics}
@@ -30,7 +35,7 @@ class ExperimentLogger:
             writer.writerow(entry)
 
     def log_concept_drift(self, month: str, metrics: dict):
-        """Record the performance degradation every month"""
+        """One row per evaluation period (EMBER month or NIDS test split) -> concept_drift.csv"""
         entry = {"month": month, **metrics}
         path = self.run_dir / "concept_drift.csv"
         write_header = not path.exists()
@@ -48,7 +53,8 @@ class ExperimentLogger:
     def log_gan_epoch(self, epoch: int, metrics: dict):
         """
         Track WGAN-GP metrics per epoch.
-        w_dist (critic's Wasserstein estimate) should shrink and stay stable;
+        w_dist (critic's Wasserstein estimate) should stay bounded: steady growth means
+        the critics win and the generator is not catching up;
         feat_mean_gap is the mean absolute gap between real and fake feature means.
         """
         entry = {"epoch": epoch, **{k: round(v, 4) for k, v in metrics.items()}}

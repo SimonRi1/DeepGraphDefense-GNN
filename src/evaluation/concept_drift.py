@@ -1,3 +1,9 @@
+"""
+Concept-drift evaluation: models trained on the past, scored on later periods.
+  - PE:   trained on January 2018, scored on each month Feb-Dec 2018 (EMBER test/<MM>/)
+  - NIDS: scored on 5 chronological chunks of the held-out last 10% of every capture
+Output: experiments/concept_drift/{PE,NIDS}_concept_drift_*.csv / .png
+"""
 import sys
 import os
 from pathlib import Path
@@ -9,6 +15,7 @@ import torch
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import global_mean_pool
 from sklearn.metrics import roc_auc_score, f1_score, recall_score
+from sklearn.svm import SVC
 import joblib
 from tqdm import tqdm
 
@@ -19,6 +26,9 @@ if str(project_root) not in sys.path:
 from src.utils.config import CONFIG
 from src.models.gnn import MFGraph
 from src.training.pe_dataset import PEGraphDataset
+
+# Parallel workers for reading .pt graph files (I/O bound)
+NUM_WORKERS = min(8, os.cpu_count() or 1)
 
 
 # =====================================================================
@@ -46,7 +56,7 @@ def load_latest_gnn(domain="pe", device="cpu"):
     weights_path = max(checkpoints, key=lambda f: f.stat().st_mtime)
     print(f"[{domain.upper()} Drift] Loaded GNN: {latest_run.name}/{weights_path.name}")
 
-    input_dim = 512 if domain == "pe" else 9
+    input_dim = CONFIG["max_feature_len"] if domain == "pe" else CONFIG["nids"]["input_dim"]
     model = MFGraph(
         input_dim=input_dim,
         hidden_dim=gnn_config.get("hidden_dim", 64),
@@ -60,6 +70,18 @@ def load_latest_gnn(domain="pe", device="cpu"):
     model.load_state_dict(state_dict)
     model.eval()
     return model
+
+
+def _baseline_predict(model, X):
+    """Returns (labels, scores) for a tabular baseline.
+    SVC: one decision_function pass (sign == predict, same ranking as predict_proba for AUC),
+    instead of two slow kernel passes."""
+    if isinstance(model, SVC):
+        scores = model.decision_function(X)
+        return (scores > 0).astype(int), scores
+    y_pred = model.predict(X)
+    y_prob = model.predict_proba(X)[:, 1] if hasattr(model, "predict_proba") else None
+    return y_pred, y_prob
 
 
 def load_joblib_baselines(baseline_dir, model_names):
@@ -96,7 +118,7 @@ def evaluate_pe_concept_drift(device):
         if m_path.exists() and list(m_path.rglob("*.pt")):
             ds = PEGraphDataset(str(m_path))
             # Evaluation batching
-            monthly_loaders[month] = DataLoader(ds, batch_size=64, shuffle=False)
+            monthly_loaders[month] = DataLoader(ds, batch_size=512, shuffle=False, num_workers=NUM_WORKERS)
 
     if not monthly_loaders:
         raise FileNotFoundError(f"No monthly subdirectories found in {test_base_path}")
@@ -150,8 +172,7 @@ def evaluate_pe_concept_drift(device):
 
         # Record Tabular Baselines Performance
         for name, model in baselines.items():
-            y_pred = model.predict(X_tabular)
-            y_prob = model.predict_proba(X_tabular)[:, 1] if hasattr(model, "predict_proba") else None
+            y_pred, y_prob = _baseline_predict(model, X_tabular)
             auc = roc_auc_score(y_true, y_prob) if y_prob is not None and len(np.unique(y_true)) > 1 else np.nan
 
             records.append({
@@ -198,10 +219,10 @@ def evaluate_nids_concept_drift(device):
         raise FileNotFoundError(f"NIDS graph directory not found: {nids_data_path}")
 
     dataset = PEGraphDataset(str(nids_data_path))
-    total_graphs = len(dataset)
-    num_chunks = 10
-    chunk_size = total_graphs // num_chunks
-    print(f"[Info] Evaluating across {num_chunks} sequential temporal chunks (~{chunk_size} graphs each)...")
+    num_chunks = 5
+    chunk_indices = _nids_heldout_chunks(nids_data_path, num_chunks)
+    print(f"[Info] Evaluating held-out test windows across {num_chunks} chronological chunks "
+          f"({[len(c) for c in chunk_indices]} graphs)...")
 
     # Load Models
     gnn_model = load_latest_gnn(domain="nids", device=device)
@@ -211,12 +232,9 @@ def evaluate_nids_concept_drift(device):
 
     records = []
 
-    for chunk_idx in range(num_chunks):
-        start_idx = chunk_idx * chunk_size
-        end_idx = start_idx + chunk_size if chunk_idx < num_chunks - 1 else total_graphs
-
-        chunk_subset = torch.utils.data.Subset(dataset, list(range(start_idx, end_idx)))
-        loader = DataLoader(chunk_subset, batch_size=256, shuffle=False)
+    for chunk_idx, indices in enumerate(chunk_indices):
+        chunk_subset = torch.utils.data.Subset(dataset, indices)
+        loader = DataLoader(chunk_subset, batch_size=512, shuffle=False, num_workers=NUM_WORKERS)
 
         all_pooled = []
         labels = []
@@ -256,8 +274,7 @@ def evaluate_nids_concept_drift(device):
 
         # Evaluate Tabular Baselines
         for name, model in baselines.items():
-            y_pred = model.predict(X_scaled)
-            y_prob = model.predict_proba(X_scaled)[:, 1] if hasattr(model, "predict_proba") else None
+            y_pred, y_prob = _baseline_predict(model, X_scaled)
             auc = roc_auc_score(y_true, y_prob) if y_prob is not None and len(np.unique(y_true)) > 1 else np.nan
 
             records.append({
@@ -283,11 +300,31 @@ def evaluate_nids_concept_drift(device):
         df_nids,
         x_col="Chunk",
         metric="F1",
-        title="Network Domain: Concept Drift Over Sequential Flow Chunks",
-        xlabel="Time Chunk (Sequential Temporal Windows)",
+        title="Network Domain: Concept Drift Over Held-out Temporal Chunks",
+        xlabel="Time Chunk (Chronological Slices of the Held-out 10% per Scenario)",
         save_path=out_dir / "NIDS_concept_drift_F1.png"
     )
     print(f"[Success] NIDS Drift evaluation complete. Artifacts saved to: {out_dir}")
+
+
+def _nids_heldout_chunks(data_dir, num_chunks):
+    """
+    Returns num_chunks lists of dataset indices covering only the held-out test
+    windows (last 10% of each scenario, same boundaries as get_nids_splits).
+    Chunk k gathers the k-th chronological slice of every scenario's test part.
+    """
+    files = sorted([f for f in os.listdir(data_dir) if f.endswith('.pt')])
+
+    scenario_groups = {}
+    for idx, f in enumerate(files):
+        scenario_groups.setdefault(f.split('_window_')[0], []).append(idx)
+
+    chunks = [[] for _ in range(num_chunks)]
+    for indices in scenario_groups.values():
+        test_part = indices[int(0.90 * len(indices)):]
+        for k, part in enumerate(np.array_split(test_part, num_chunks)):
+            chunks[k].extend(int(i) for i in part)
+    return chunks
 
 
 # =====================================================================

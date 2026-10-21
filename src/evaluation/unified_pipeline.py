@@ -95,10 +95,10 @@ def load_unified_system(device, pe_input_dim, nids_input_dim, pe_model_kind="gnn
     exp_base = project_root / CONFIG.get("experiments_path", "experiments")
 
     if pe_model_kind == "gan":
-        pe_weights = find_latest_checkpoint(exp_base / "gan_training", "model_gan.pth")
+        pe_weights = find_latest_checkpoint(exp_base / "pe_gan_training", "model_gan.pth")
     else:
-        pe_weights = find_latest_checkpoint(exp_base / "gnn_training", "best_gnn_model.pth")
-    nids_weights = find_latest_checkpoint(exp_base / "nids_gnn", "model_gnn.pth")
+        pe_weights = find_latest_checkpoint(exp_base / "pe_gnn_training", "best_gnn_model.pth")
+    nids_weights = find_latest_checkpoint(exp_base / "nids_gnn_training", "model_gnn.pth")
 
     print(f"[Unified Pipeline] PE weights:   {pe_weights}")
     print(f"[Unified Pipeline] NIDS weights: {nids_weights}")

@@ -10,9 +10,12 @@ from torch_geometric.data import Dataset as GeometricDataset
 
 class PEGraphDataset(GeometricDataset):
     """
-    Dataset loader for GNN and GAN models.
-    Loads pre-processed PyTorch Geometric .pt graph files from disk.
-    Supports recursive searching for subfolders (e.g., test/02, test/03).
+    Lazy loader for pre-built PyTorch Geometric graphs (.pt files), used by every
+    GNN/GAN script for both domains. Searches subfolders recursively (test/02, test/03, ...).
+
+    Note: index i maps to self.file_paths[i] in filesystem (rglob) order, which is
+    NOT alphabetical. Code that computes indices from a sorted file list
+    (get_nids_splits, _nids_heldout_chunks) assumes the two orders match.
     """
     def __init__(self, root_dir):
         super().__init__()
@@ -35,9 +38,9 @@ class PEGraphDataset(GeometricDataset):
 
 class EmberFlatDataset(TorchDataset):
     """
-    Dataset loader for the baseline MLP (and LGBM).
-    Loads the original EMBER .dat files directly using numpy memmap
-    and strictly filters training data to Jan 2018 to evaluate concept drift.
+    Flat (non-graph) EMBER loader over the original vectorised .dat files (memmap).
+    The train split keeps only January 2018 samples, matching the GNN training period.
+    Not used by the current baselines, which pool the graph node features instead.
     """
     def __init__(self, data_dir: str, split: str = "train"):
         super().__init__()
