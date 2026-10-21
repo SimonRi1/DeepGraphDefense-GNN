@@ -52,7 +52,7 @@ def run_pe_extraction():
 
 def gnn_task():
     print("\n--- Starting GNN Training ---")
-    from src.training.train_gnn import train_gnn 
+    from src.training.train_gnn_pe import train_gnn 
 
     graphs_dir = project_root / CONFIG["ember_graphs_path"]
     train_dir = graphs_dir / "train"
@@ -74,7 +74,7 @@ def gnn_task():
 
 def gan_task():
     print("\n--- Starting GAN Robustness & MFGraph Training ---")
-    from src.training.train_gan import train_gan
+    from src.training.train_gan_pe import train_gan
     
     graphs_dir = project_root / CONFIG["ember_graphs_path"]
     train_dir = graphs_dir / "train"
@@ -200,7 +200,7 @@ def main():
     )
     
     tasks = [
-        "extract_pe", "ember_graph", "train_gnn", "train_gan", "train_nids", 
+        "extract_pe", "ember_graph", "train_gnn", "train_gan", "train_gan_nids", "train_nids", 
         "train_nids_baselines", "train_pe_baselines", "plot_metrics", "eval_drift", 
         "build_cicids", "eval_nids_adversarial", "eval_pe_adversarial", "unified_pipeline"
     ]
@@ -229,6 +229,10 @@ def main():
     elif args.task == "train_gan":
         gan_task()
 
+    elif args.task == "train_gan_nids":
+        from src.training.train_gan_nids import train_gan as train_gan_nids
+        train_gan_nids()
+
     elif args.task == "train_pe_baselines":
         from baselines.train_baseline_pe import train_pe_baselines
         train_pe_baselines()
@@ -237,7 +241,7 @@ def main():
         build_cicids_graphs()
 
     elif args.task == "train_nids":
-        from src.training.train_nids import train_nids_gnn
+        from src.training.train_gnn_nids import train_nids_gnn
         train_nids_gnn()
 
     elif args.task == "train_nids_baselines":
