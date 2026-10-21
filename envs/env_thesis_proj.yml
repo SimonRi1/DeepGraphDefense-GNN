@@ -6,6 +6,7 @@ channels:
 dependencies:
   - python=3.10
   - ipykernel
+  - nbconvert   # headless notebook execution: jupyter nbconvert --execute
   - numpy
   - pandas
   - scikit-learn
