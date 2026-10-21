@@ -26,7 +26,7 @@ def train_gan():
         train_data=train_loader.dataset,
         val_loader=val_loader,
         test_loaders={"test": test_loader},
-        input_dim=CONFIG["nids"]["input_dim"],
+        input_dim=train_loader.dataset[0].x.shape[1],
         per_node_range=False,  # flows are interchangeable: one range per feature
         lr=CONFIG["nids"]["learning_rate"],
         logger=logger,

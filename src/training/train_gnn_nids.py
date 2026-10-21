@@ -6,7 +6,6 @@ import torch.optim as optim
 from pathlib import Path
 from tqdm import tqdm
 from sklearn.metrics import roc_auc_score, f1_score
-from src.training.nids_dataset import get_nids_splits
 import numpy as np
 import pandas as pd
 
@@ -15,6 +14,7 @@ if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 from src.models.gnn import MFGraph
+from src.training.nids_dataset import get_nids_splits
 from src.utils.logger import ExperimentLogger
 from src.utils.config import CONFIG
 
@@ -37,9 +37,11 @@ def train_nids_gnn():
     print(f"Class distribution — Benign: {num_benign}, Malicious: {num_malicious}")
     print(f"pos_weight: {pos_weight.item():.4f}")
 
-    # Enforce input_dim=12 to match the new graph builder
+    input_dim = train_loader.dataset[0].x.shape[1]
+    print(f"Detected input dimension: {input_dim}")
+
     model = MFGraph(
-        input_dim=nids_config["input_dim"], 
+        input_dim=input_dim, 
         hidden_dim=gnn_config["hidden_dim"], 
         k=gnn_config["k"], 
         dropout_rate=gnn_config["dropout_rate"]
