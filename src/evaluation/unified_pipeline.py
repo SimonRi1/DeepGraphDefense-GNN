@@ -12,7 +12,8 @@ Steps:
     2. Calibrate each detector on held-out data (threshold -> risk 0.5).
     3. Generate mixed sessions (normal traffic, network attacks, malware
        drops, multi-stage intrusions) with a realistic benign majority.
-    4. Aggregate per-session risk with a weighted Noisy-OR -> unified score.
+    4. Fuse per-domain max risks into a unified score (Noisy-OR boost when
+       both detectors agree, strongest signal otherwise) + alert level.
     5. Compute event-level, session-level and Impact Mitigation metrics.
 """
 import sys

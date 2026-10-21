@@ -36,6 +36,9 @@ Both detectors are trained with Generative Adversarial Networks (GANs) to make t
 - [Configuration](#configuration)
 - [Evaluation Methodology](#evaluation-methodology)
 - [Performance](#performance)
+- [Hardware and Training Time](#hardware-and-training-time)
+  - [Training Environment](#training-environment)
+  - [Execution Time](#execution-time)
 - [Limitations and Known Issues](#limitations-and-known-issues)
 - [Testing](#testing)
 - [Contributing](#contributing)
@@ -49,8 +52,8 @@ Both detectors are trained with Generative Adversarial Networks (GANs) to make t
 
 Most malware and intrusion detectors in use today are trained on flat feature vectors. This works on data that looks like the training set, but the models have two known weaknesses:
 
-1. **Concept drift**: Malware families and attack patterns change over time, and accuracy drops on samples that appear after the training period.
-2. **Adversarial evasion**: Small, targeted changes to a sample's features (padding bytes, altering packet timings) can push it past the decision boundary.
+1. **Concept drift.** Malware families and attack patterns change over time, and accuracy drops on samples that appear after the training period.
+2. **Adversarial evasion.** Small, targeted changes to a sample's features (padding bytes, altering packet timings) can push it past the decision boundary.
 
 A graph representation keeps the *relationships* between features: how the parts of an executable relate to each other, or which network flows share a host or port. A model that learns from this structure, rather than from isolated values, can generalize better and is harder to fool with changes to single features.
 
@@ -76,9 +79,9 @@ A graph representation keeps the *relationships* between features: how the parts
 
 ```
                  ┌──────────────────────── Network layer (traffic analysis) ───────────────────────┐
- CIC-IDS2017 ───►│ CSV flows ─► window (N flows) ─► Flow Graph ─► DGCNN (NIDS) ─► p_nids ─► calib. │──► r_nids ──┐
-                 └─────────────────────────────────────────────────────────────────────────────────┘             │
-                 ┌────────────────────────── Host layer (file analysis) ───────────────────────────┐             ▼
+ CIC-IDS2017 ───►│ CSV flows ─► window (N flows) ─► Flow Graph ─► DGCNN (NIDS) ─► p_nids ─► calib. │──► r_nids ─┐
+                 └─────────────────────────────────────────────────────────────────────────────────┘            │
+                 ┌────────────────────────── Host layer (file analysis) ───────────────────────────┐            ▼
  EMBER / .exe ──►│ PE file ─► 9 feature groups ─► MFGraph ─► DGCNN / DGCNN+GAN ─► p_pe ─► calib.   │──► r_pe ──► Unified score
                  └─────────────────────────────────────────────────────────────────────────────────┘          ─► alert + severity
                             ▲                                                                ▲                ─► Impact Mitigation
@@ -202,26 +205,24 @@ The pipeline reports event-level metrics (per detector), session-level metrics (
 ```text
 thesis-project/
 ├── orchestrator.py                 # single CLI entry point for every pipeline task
+│
 ├── data/
 │   ├── raw/                        # EMBER 2018 (.jsonl), CIC-IDS2017 (.csv), PE samples
 │   ├── processed/                  # intermediate extracted features
 │   └── graphs/                     # serialized PyG graphs (.pt)
 │       ├── ember_graphs/{train,test/MM}
 │       └── nids_graphs/
-│ 
+│
 ├── src/
 │   ├── features/
 │   │   └── pe_extractor.py         # LIEF PE extractor + EMBER feature parser (9 groups)
-│   │ 
 │   ├── graph/
 │   │   ├── feature_graph.py        # MFGraph builder (9-node PE topology)
 │   │   ├── ember_graph.py          # EMBER → graphs, split by month for drift evaluation
 │   │   └── cic_graph.py            # CIC-IDS2017 → windowed flow graphs
-│   │ 
 │   ├── models/
 │   │   ├── gnn.py                  # DGCNN + SortPooling + MLP classifier
 │   │   └── gan.py                  # graph generator + DGCNN critics
-│   │ 
 │   ├── training/
 │   │   ├── pe_dataset.py           # PE graph dataset loader
 │   │   ├── nids_dataset.py         # NIDS graph dataset and splits
@@ -230,22 +231,20 @@ thesis-project/
 │   │   ├── gan_pipeline.py         # shared Dropout-WGAN-GP + augmented classifier pipeline
 │   │   ├── train_gan_pe.py         # GAN pipeline: PE domain
 │   │   └── train_gan_nids.py       # GAN pipeline: NIDS domain
-│   │
 │   ├── evaluation/
 │   │   ├── concept_drift.py        # performance over time (EMBER months / NIDS chunks)
 │   │   ├── pe_adversarial.py       # GAN-driven perturbation attacks on PE detectors
 │   │   ├── nids_adversarial.py     # feature-scaling attacks (timing / packet size) on NIDS
 │   │   ├── plot_metrics.py         # comparison tables and plots
 │   │   └── unified_pipeline.py     # NIDS + PE defense-in-depth simulation
-│   │
 │   └── utils/
 │       ├── config.py               # paths and hyperparameters
 │       └── logger.py               # experiment logging
-│   
+│
 ├── baselines/
 │   ├── train_baseline_pe.py        # classical ML baselines on flattened PE features
 │   └── train_baseline_nids.py      # classical ML baselines on flattened flow features
-│   
+│
 ├── notebooks/                      # exploration, graph visualization, result analysis
 ├── experiments/                    # checkpoints, logs, metrics and plots
 ├── tests/                          # unit tests (extractor, graph builder, logger)
@@ -258,10 +257,10 @@ thesis-project/
 
 - Linux or macOS (tested on Linux)
 - [Conda](https://docs.conda.io/) or Mamba
-- Python 3.10 (execution of whole the project) and Python 3.7 (pe extraction from Ember raw data)
-- PyTorch and PyTorch Geometric
+- Python 3.10
+- PyTorch and PyTorch Geometric. The environment installs the CPU build by default; a CUDA GPU is optional but recommended for GAN training however it needs to implement.
 - About 50 GB of free disk space for the raw datasets and the generated graphs
-- At least 8 GB of ram and 8 core of CPU
+- At least 8 or 16 GB of RAM for the model training
 
 ---
 
@@ -278,6 +277,8 @@ conda activate thesis-gnn
 # Optional: legacy environment for the original EMBER feature extraction (Python 3.7, LightGBM)
 conda env create -f envs/env_ember.yml
 ```
+
+For GPU support, replace the CPU wheel index in `envs/env_thesis_proj.yml` with the CUDA build that matches your system.
 
 ---
 
@@ -398,6 +399,43 @@ All paths and hyperparameters are set in [src/utils/config.py](src/utils/config.
 | NIDS   | DGCNN            |          |           |        |    |         |
 | NIDS   | DGCNN + GAN      |          |           |        |    |         |
 | NIDS   | Best baseline    |          |           |        |    |         |
+
+---
+
+## Hardware and Training Time
+
+### Training Environment
+
+All models were trained and evaluated on the following machine:
+
+| Component | Specification |
+|-----------|---------------|
+| CPU       | Intel Core i7-6700 @ 3.40 GHz (4 cores / 8 threads) |
+| GPU       | NVIDIA GeForce GTX 950, 2 GB VRAM (driver 580.178.04) |
+| RAM       | 16 GB |
+| Storage   | 1 TB SSD/HDD |
+| OS        | EndeavourOS (Arch Linux), kernel 6.18 LTS |
+| Python    | 3.10 (conda environment `thesis-gnn`) |
+| Device used for training | CPU / CUDA |
+
+### Execution Time
+
+Wall-clock time for a single run of each task, using the default configuration in [src/utils/config.py](src/utils/config.py).
+
+| Task (`orchestrator.py -t`) | Model / Step                         | Epochs | Device | Execution time |
+|-----------------------------|--------------------------------------|--------|--------|----------------|
+| `ember_graph`               | EMBER → MFGraph construction         | –      |        |                |
+| `build_cicids`              | CIC-IDS2017 → flow graph construction | –      |        |                |
+| `train_gnn`                 | GNN PE (DGCNN)                       | 20     |        |                |
+| `train_gan`                 | GAN PE (Dropout-WGAN-GP + classifier) | 20     |        |                |
+| `train_pe_baselines`        | PE baselines (LR, DT, SVM, MLP, FFDNN) | –      |        |                |
+| `train_nids`                | GNN NIDS (DGCNN)                     |        |        |                |
+| `train_gan_nids`            | GAN NIDS (Dropout-WGAN-GP + classifier) | 20     |        |                |
+| `train_nids_baselines`      | NIDS baselines (LR, DT, SVM, MLP, FFDNN) | –      |        |                |
+| `eval_drift`                | Concept drift evaluation             | –      |        |                |
+| `eval_pe_adversarial`       | PE adversarial evaluation            | –      |        |                |
+| `eval_nids_adversarial`     | NIDS adversarial evaluation          | –      |        |                |
+| `unified_pipeline`          | Unified defense-in-depth simulation  | –      |        |                |
 
 ---
 
