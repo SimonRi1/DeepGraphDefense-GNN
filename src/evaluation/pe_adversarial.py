@@ -66,7 +66,7 @@ def compute_all_metrics(y_true, y_pred, y_prob=None):
 def load_pe_gnn(device):
     """Loads the trained PE MFGraph."""
     gnn_config = CONFIG["gnn"]
-    pe_dir = project_root / CONFIG["experiments_path"] / "gnn_training"
+    pe_dir = project_root / CONFIG["experiments_path"] / "pe_gnn_training"
     
     # Find all subdirectories and sort them descending (latest timestamp first)
     timestamp_folders = sorted([d for d in pe_dir.iterdir() if d.is_dir()], reverse=True)
@@ -103,7 +103,7 @@ def load_pe_gnn(device):
 
 def load_pe_gan(device):
     """Loads the trained GAN Generator if available."""
-    gan_dir = project_root / CONFIG["experiments_path"] / "gan_training"
+    gan_dir = project_root / CONFIG["experiments_path"] / "pe_gan_training"
     if not gan_dir.exists():
         print(f"[PE Adversarial] GAN folder not found at {gan_dir}. Using variance-scaled perturbation.")
         return None
@@ -222,7 +222,7 @@ def evaluate_pe_adversarial():
     gnn_model = load_pe_gnn(device)
     gan_gen = load_pe_gan(device)
     
-    baseline_dir = project_root / "experiments" / "PEbaselines_training"
+    baseline_dir = project_root / "experiments" / "pe_baselines_training"
     model_names = ["LR-based", "DT-based", "SVM-based", "KNN-based", "AdaBoost-based", "MLP-based", "FFDNN-based"]
     baselines = {}
     

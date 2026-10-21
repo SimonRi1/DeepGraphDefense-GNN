@@ -315,14 +315,14 @@ python orchestrator.py --task <TASK>
 |-----------------------|--------------------------------------------------------------------------|
 | `ember_graph`         | Build MFGraphs from the EMBER `.jsonl` files, with monthly train/test split |
 | `extract_pe`          | Extract features from raw `.exe` files with LIEF and build their graphs   |
-| `train_gnn`           | Train the DGCNN PE classifier (builds the graphs first if they are missing) |
-| `train_gan`           | Train the Dropout-WGAN-GP and the GAN-augmented PE classifier             |
+| `train_pe_gnn`           | Train the DGCNN PE classifier (builds the graphs first if they are missing) |
+| `train_pe_gan`           | Train the Dropout-WGAN-GP and the GAN-augmented PE classifier             |
 | `train_pe_baselines`  | Train the classical ML baselines on flattened PE features                 |
 
 ```bash
 python orchestrator.py -t ember_graph
-python orchestrator.py -t train_gnn
-python orchestrator.py -t train_gan
+python orchestrator.py -t train_pe_gnn
+python orchestrator.py -t train_pe_gan
 python orchestrator.py -t train_pe_baselines
 ```
 
@@ -331,14 +331,14 @@ python orchestrator.py -t train_pe_baselines
 | Task                    | Description                                                    |
 |-------------------------|----------------------------------------------------------------|
 | `build_cicids`          | Turn the CIC-IDS2017 CSV files into windowed flow graphs       |
-| `train_nids`            | Train the DGCNN NIDS classifier                                |
-| `train_gan_nids`        | Train the Dropout-WGAN-GP and the GAN-augmented NIDS classifier |
+| `train_nids_gnn`            | Train the DGCNN NIDS classifier                                |
+| `train_nids_gan`        | Train the Dropout-WGAN-GP and the GAN-augmented NIDS classifier |
 | `train_nids_baselines`  | Train the classical ML baselines on flattened flow features     |
 
 ```bash
 python orchestrator.py -t build_cicids
-python orchestrator.py -t train_nids
-python orchestrator.py -t train_gan_nids
+python orchestrator.py -t train_nids_gnn
+python orchestrator.py -t train_nids_gan
 python orchestrator.py -t train_nids_baselines
 ```
 
@@ -426,11 +426,11 @@ Wall-clock time for a single run of each task, using the default configuration i
 |-----------------------------|--------------------------------------|--------|--------|----------------|
 | `ember_graph`               | EMBER → MFGraph construction         | –      |        |                |
 | `build_cicids`              | CIC-IDS2017 → flow graph construction | –      |        |                |
-| `train_gnn`                 | GNN PE (DGCNN)                       | 20     |        |                |
-| `train_gan`                 | GAN PE (Dropout-WGAN-GP + classifier) | 20     |        |                |
+| `train_pe_gnn`                 | GNN PE (DGCNN)                       | 20     |        |                |
+| `train_pe_gan`                 | GAN PE (Dropout-WGAN-GP + classifier) | 20     |        |                |
 | `train_pe_baselines`        | PE baselines (LR, DT, SVM, MLP, FFDNN) | –      |        |                |
-| `train_nids`                | GNN NIDS (DGCNN)                     |        |        |                |
-| `train_gan_nids`            | GAN NIDS (Dropout-WGAN-GP + classifier) | 20     |        |                |
+| `train_nids_gnn`                | GNN NIDS (DGCNN)                     |        |        |                |
+| `train_nids_gan`            | GAN NIDS (Dropout-WGAN-GP + classifier) | 20     |        |                |
 | `train_nids_baselines`      | NIDS baselines (LR, DT, SVM, MLP, FFDNN) | –      |        |                |
 | `eval_drift`                | Concept drift evaluation             | –      |        |                |
 | `eval_pe_adversarial`       | PE adversarial evaluation            | –      |        |                |

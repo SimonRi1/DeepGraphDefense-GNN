@@ -200,7 +200,7 @@ def main():
     )
     
     tasks = [
-        "extract_pe", "ember_graph", "train_gnn", "train_gan", "train_gan_nids", "train_nids", 
+        "extract_pe", "ember_graph", "train_pe_gnn", "train_pe_gan", "train_nids_gan", "train_nids_gnn", 
         "train_nids_baselines", "train_pe_baselines", "plot_metrics", "eval_drift", 
         "build_cicids", "eval_nids_adversarial", "eval_pe_adversarial", "unified_pipeline"
     ]
@@ -223,13 +223,13 @@ def main():
         print("\n--- Starting EMBER Graph Construction ---")
         ember_graph_building()
 
-    elif args.task == "train_gnn":
+    elif args.task == "train_pe_gnn":
         gnn_task()
         
-    elif args.task == "train_gan":
+    elif args.task == "train_pe_gan":
         gan_task()
 
-    elif args.task == "train_gan_nids":
+    elif args.task == "train_nids_gan":
         from src.training.train_gan_nids import train_gan as train_gan_nids
         train_gan_nids()
 
@@ -240,7 +240,7 @@ def main():
     elif args.task == "build_cicids":
         build_cicids_graphs()
 
-    elif args.task == "train_nids":
+    elif args.task == "train_nids_gnn":
         from src.training.train_gnn_nids import train_nids_gnn
         train_nids_gnn()
 

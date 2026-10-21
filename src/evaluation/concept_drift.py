@@ -29,7 +29,7 @@ def load_latest_gnn(domain="pe", device="cpu"):
     """Loads the GNN model from the latest timestamped folder for PE or NIDS."""
     gnn_config = CONFIG.get("gnn", {"hidden_dim": 64, "k": 10, "dropout_rate": 0.5})
     base_dir = project_root / CONFIG.get("experiments_path", "experiments")
-    exp_dir = base_dir / ("gnn_training" if domain == "pe" else "nids_gnn")
+    exp_dir = base_dir / ("pe_gnn_training" if domain == "pe" else "nids_gnn_training")
 
     if not exp_dir.exists():
         raise FileNotFoundError(f"Experiment folder not found: {exp_dir}")
@@ -103,7 +103,7 @@ def evaluate_pe_concept_drift(device):
 
     # Load Models
     gnn_model = load_latest_gnn(domain="pe", device=device)
-    baseline_dir = project_root / "experiments" / "PEbaselines_training"
+    baseline_dir = project_root / "experiments" / "pe_baselines_training"
     pe_models = [
         "LR-based", "DT-based", "SVM-based", "KNN-based",
         "AdaBoost-based", "MLP-based", "FFDNN-based"
@@ -205,7 +205,7 @@ def evaluate_nids_concept_drift(device):
 
     # Load Models
     gnn_model = load_latest_gnn(domain="nids", device=device)
-    baseline_dir = project_root / "experiments" / "NIDSbaselines_training"
+    baseline_dir = project_root / "experiments" / "nids_baselines_training"
     nids_models = ["Random Forest", "Decision Tree ID3", "AdaBoost", "MLP", "SVM"]
     baselines = load_joblib_baselines(baseline_dir, nids_models)
 

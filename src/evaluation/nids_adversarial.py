@@ -60,7 +60,7 @@ def load_nids_gnn(device):
     gnn_config = CONFIG.get("gnn", {"hidden_dim": 64, "k": 10, "dropout_rate": 0.5})
     
     # Locate the experiments folder
-    nids_dir = project_root / CONFIG.get("experiments_path", "experiments") / "nids_gnn"
+    nids_dir = project_root / CONFIG.get("experiments_path", "experiments") / "nids_gnn_training"
     
     if not nids_dir.exists():
         raise FileNotFoundError(f"NIDS experiments directory not found at {nids_dir}")
@@ -142,7 +142,7 @@ def evaluate_nids_adversarial():
     # 2. Load Models
     gnn_model = load_nids_gnn(device)
     
-    baseline_dir = project_root / "experiments" / "NIDSbaselines_training"
+    baseline_dir = project_root / "experiments" / "nids_baselines_training"
     model_names = ["Random Forest", "Decision Tree ID3", "AdaBoost", "MLP", "SVM"]
     baselines = {}
     
