@@ -20,7 +20,7 @@ def train_gan():
     # Chronological per-scenario split (past / near-future / distant-future)
     train_loader, val_loader, test_loader = get_nids_splits(data_dir, batch_size=128, seed=CONFIG["random_seed"])
 
-    logger = ExperimentLogger(experiment_name="gan_training_nids", config=CONFIG)
+    logger = ExperimentLogger(experiment_name="nids_gan_training", config=CONFIG)
 
     return run_gan_pipeline(
         train_data=train_loader.dataset,

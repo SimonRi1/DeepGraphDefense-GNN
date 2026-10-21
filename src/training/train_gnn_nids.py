@@ -53,7 +53,7 @@ def train_nids_gnn():
     # Initialize Scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', patience=2, factor=0.5)
     
-    logger = ExperimentLogger(experiment_name="nids_gnn", config=CONFIG)
+    logger = ExperimentLogger(experiment_name="nids_gnn_training", config=CONFIG)
     
     # Tracking AUC to lock in peak performance
     best_auc = 0.0

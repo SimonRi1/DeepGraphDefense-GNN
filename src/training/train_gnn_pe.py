@@ -30,7 +30,7 @@ def train_gnn():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Training on device: {device}")
 
-    logger = ExperimentLogger(experiment_name="gnn_training", config=CONFIG)
+    logger = ExperimentLogger(experiment_name="pe_gnn_training", config=CONFIG)
     graphs_dir = project_root / CONFIG["ember_graphs_path"]
     
     print("\n[Data] Loading January 2018 dataset (Training set)...")

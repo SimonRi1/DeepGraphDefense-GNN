@@ -37,7 +37,7 @@ def train_gan():
         for month_dir in sorted((graphs_dir / "test").iterdir()) if month_dir.is_dir()
     }
 
-    logger = ExperimentLogger(experiment_name="gan_training", config=CONFIG)
+    logger = ExperimentLogger(experiment_name="pe_gan_training", config=CONFIG)
 
     return run_gan_pipeline(
         train_data=train_data,
