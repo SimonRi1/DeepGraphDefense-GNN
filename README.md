@@ -424,18 +424,18 @@ Wall-clock time for a single run of each task, using the default configuration i
 
 | Task (`orchestrator.py -t`) | Model / Step                         | Execution time |
 |-----------------------------|--------------------------------------|----------------|
-| `ember_graph`               | EMBER → MFGraph construction         |                |
-| `build_cicids`              | CIC-IDS2017 → flow graph construction |                |
-| `train_pe_gnn`              | GNN PE (DGCNN)                       |                |
-| `train_pe_gan`              | GAN PE (Dropout-WGAN-GP + classifier)|                |
-| `train_pe_baselines`        | PE baselines (LR, DT, SVM, MLP, FFDNN)|     14m 14s    |
+| `ember_graph`               | EMBER → MFGraph construction         |    33m 30s     |
+| `build_cicids`              | CIC-IDS2017 → flow graph construction |     1m 12s     |
+| `train_pe_gnn`              | GNN PE (DGCNN)                       |    17m 57s    |
+| `train_pe_gan`              | GAN PE (Dropout-WGAN-GP + classifier)|   3h 11m 40s   |
+| `train_pe_baselines`        | PE baselines (LR, DT, SVM, MLP, FFDNN)|    14m 14s    |
 | `train_nids_gnn`            | GNN NIDS (DGCNN)                     |     3m 21s     |
 | `train_nids_gan`            | GAN NIDS (Dropout-WGAN-GP + classifier) |     10m 46s    |
 | `train_nids_baselines`      | NIDS baselines (LR, DT, SVM, MLP, FFDNN) |     21s        |
-| `eval_drift`                | Concept drift evaluation             |                |
-| `eval_pe_adversarial`       | PE adversarial evaluation            |                |
-| `eval_nids_adversarial`     | NIDS adversarial evaluation          |                |
-| `unified_pipeline`          | Unified defense-in-depth simulation  |                |
+| `eval_drift`                | Concept drift evaluation             |   2h 47m 47s   |
+| `eval_pe_adversarial`       | PE adversarial evaluation            |     1m 18s     |
+| `eval_nids_adversarial`     | NIDS adversarial evaluation          |      13s       |
+| `unified_pipeline`          | Unified defense-in-depth simulation  |     2m 50s     |
 
 ---
 
