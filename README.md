@@ -151,7 +151,7 @@ Large groups are linked as a chain rather than all-to-all, so the graph does not
 
 In `multi_stage` sessions, the order follows the kill chain: malicious traffic (reconnaissance or exploitation) always comes before the malware reaches the host.
 
-**2. Risk calibration.** Raw probabilities from two different models cannot be compared directly. For each detector, the best operating threshold *t* is chosen on held-out data with Youden's J statistic (max TPR − FPR). The probability is then mapped piecewise-linearly so that *t* falls exactly at 0.5:
+**2. Risk calibration.** Raw probabilities from two different models cannot be compared directly. For each detector, the operating threshold *t* is chosen on held-out data as the lowest threshold that keeps the false positive rate at or below a target (`target_fpr`, default 1%). The event stream is mostly benign, so a threshold tuned for a balanced set (Youden's J) would raise too many false alarms. The probability is then mapped piecewise-linearly so that *t* falls exactly at 0.5:
 
 $$
 r(p) =
@@ -194,7 +194,7 @@ The unified score sets the severity of the alert:
 The **Impact Mitigation (IM)** score is the mean weight over threat sessions. The **net IM** also subtracts a cost of 0.1 for each false alert on a benign session, so a detector that flags everything gets no credit:
 
 $$
-IM_{net} = \frac{\sum_{\text{threats}} w_{\text{outcome}} \;-\; 0.1 \cdot \#\text{false alerts}}{\#\text{threat sessions}}
+IM_{net} = \frac{\sum_{\text{threats}} w_{\text{outcome}} \;-\; 0.1 \cdot N_{\text{false alerts}}}{N_{\text{threat sessions}}}
 $$
 
 The pipeline reports event-level metrics (per detector), session-level metrics (on the unified score), IM, net IM and the false-alarm rate. It can be run with the standard PE GNN or with the GAN-hardened one (`pe_model: "gnn" | "gan"`).
@@ -380,7 +380,8 @@ Run the corresponding orchestrator tasks first, then open the notebooks in numer
 | `05_adversarial_robustness.ipynb` | RQ3: degradation under packet-size, inter-arrival-time and GAN-evasion attacks |
 | `06_unified_pipeline.ipynb` | RQ4: NIDS + PE defense-in-depth simulation and Impact Mitigation |
 
-**Running outside VS Code.** Register the conda environment as a Jupyter kernel once:
+If you **Running this notebooks outside VS Code**, follow this few commands. 
+Register the conda environment as a Jupyter kernel once:
 
 ```bash
 conda activate thesis-gnn
@@ -427,16 +428,33 @@ All paths and hyperparameters are set in [src/utils/config.py](src/utils/config.
 
 ## Performance
 
-> Results are produced by `plot_metrics` and stored in `experiments/model_comparisons/<timestamp>/`. The tables below will be filled in with the final thesis results.
+Clean (unperturbed) test performance. Source of each row:
 
-| Domain | Model            | Accuracy | Precision | Recall | F1 | ROC-AUC |
-|--------|------------------|----------|-----------|--------|----|---------|
-| PE     | DGCNN            |          |           |        |    |         |
-| PE     | DGCNN + GAN      |          |           |        |    |         |
-| PE     | Best baseline    |          |           |        |    |         |
-| NIDS   | DGCNN            |          |           |        |    |         |
-| NIDS   | DGCNN + GAN      |          |           |        |    |         |
-| NIDS   | Best baseline    |          |           |        |    |         |
+- **PE DGCNN / PE best baseline:** clean point (intensity 0.0x) of `eval_pe_adversarial`, 2000 test samples from EMBER Feb–Dec 2018.
+- **PE DGCNN + GAN:** mean over the monthly test sets Feb–Dec 2018 (`pe_gan_training/<run>/final_scores.json`).
+- **NIDS DGCNN / NIDS best baseline:** clean point (scale 1.0x) of `eval_nids_adversarial`, chronological test split (570 windows, 21 malicious).
+- **NIDS DGCNN + GAN:** test set of the GAN pipeline (`nids_gan_training/<run>/final_scores.json`). It is a different test set from the other NIDS rows, so it is not directly comparable.
+
+| Domain | Model                       | Accuracy | Precision | Recall | F1    | ROC-AUC |
+|--------|-----------------------------|----------|-----------|--------|-------|---------|
+| PE     | DGCNN (MFGraph)             | 0.855    | 0.899     | 0.814  | 0.854 | 0.932   |
+| PE     | DGCNN + GAN                 | 0.820    | 0.907     | 0.736  | 0.812 | 0.925   |
+| PE     | Best baseline (MLP)         | 0.795    | 0.839     | 0.750  | 0.792 | 0.884   |
+| NIDS   | DGCNN (MFGraph)             | 0.986    | 0.783     | 0.857  | 0.818 | 0.994   |
+| NIDS   | DGCNN + GAN                 | 0.953    | 0.876     | 0.884  | 0.880 | 0.963   |
+| NIDS   | Best baseline (MLP)         | 0.995    | 1.000     | 0.857  | 0.923 | 1.000   |
+
+Adversarial robustness (F1 at the strongest perturbation, only malicious samples perturbed):
+
+| Domain | Attack                          | DGCNN | Best baseline at clean point (MLP) |
+|--------|---------------------------------|-------|------------------------------------|
+| PE     | GAN evasion, intensity 1.0x     | 0.383 | 0.920 (transfer attack crafted in the GNN feature space) |
+| NIDS   | Packet size × 5                 | 0.818 | 0.000 |
+| NIDS   | Inter-arrival time × 10         | 0.762 | 0.865 |
+
+Unified pipeline (2000 sessions, 1% target FPR per detector): session F1 0.841, precision 85.6%, recall 82.7%, false alarm rate 6.2%, Impact Mitigation 72.6% (net 71.2%).
+
+Full tables and plots: `experiments/` and `plot_metrics` (`experiments/model_comparisons/<timestamp>/`).
 
 ---
 
@@ -462,18 +480,18 @@ Wall-clock time for a single run of each task, using the default configuration i
 
 | Task (`orchestrator.py -t`) | Model / Step                         | Execution time |
 |-----------------------------|--------------------------------------|----------------|
-| `ember_graph`               | EMBER → MFGraph construction         |    33m 30s     |
-| `build_cicids`              | CIC-IDS2017 → flow graph construction |     1m 12s     |
-| `train_pe_gnn`              | GNN PE (DGCNN)                       |    17m 57s    |
-| `train_pe_gan`              | GAN PE (Dropout-WGAN-GP + classifier)|   3h 11m 40s   |
-| `train_pe_baselines`        | PE baselines (LR, DT, SVM, MLP, FFDNN)|    14m 14s    |
-| `train_nids_gnn`            | GNN NIDS (DGCNN)                     |     3m 21s     |
-| `train_nids_gan`            | GAN NIDS (Dropout-WGAN-GP + classifier) |     10m 46s    |
+| `ember_graph`               | EMBER → MFGraph construction         |    ~33m    |
+| `build_cicids`              | CIC-IDS2017 → flow graph construction |     ~1m     |
+| `train_pe_gnn`              | GNN PE (DGCNN)                       |    ~18m    |
+| `train_pe_gan`              | GAN PE (Dropout-WGAN-GP + classifier)|   ~3h 11m    |
+| `train_pe_baselines`        | PE baselines (LR, DT, SVM, MLP, FFDNN)|    ~14m     |
+| `train_nids_gnn`            | GNN NIDS (DGCNN)                     |     ~3m      |
+| `train_nids_gan`            | GAN NIDS (Dropout-WGAN-GP + classifier) |     ~10m 46s    |
 | `train_nids_baselines`      | NIDS baselines (LR, DT, SVM, MLP, FFDNN) |     21s        |
-| `eval_drift`                | Concept drift evaluation             |   2h 47m 47s   |
-| `eval_pe_adversarial`       | PE adversarial evaluation            |     1m 18s     |
-| `eval_nids_adversarial`     | NIDS adversarial evaluation          |      13s       |
-| `unified_pipeline`          | Unified defense-in-depth simulation  |     2m 50s     |
+| `eval_drift`                | Concept drift evaluation             |   ~2h 47m    |
+| `eval_pe_adversarial`       | PE adversarial evaluation            |     ~1m      |
+| `eval_nids_adversarial`     | NIDS adversarial evaluation          |      ~13s       |
+| `unified_pipeline`          | Unified defense-in-depth simulation  |     ~3m      |
 
 ---
 
