@@ -14,6 +14,7 @@ PyLibs
 *.7z
 data/
 experiments/
+.ipynb_checkpoints/
 
 # Exclude default and custom temporary directories
 Backup_*
@@ -21,3 +22,4 @@ Backup_*
 # Python bytecode and cache files
 __pycache__/
 *.py[cod]
+
