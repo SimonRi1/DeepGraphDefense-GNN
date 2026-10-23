@@ -137,11 +137,28 @@ def load_pe_gan(device):
     return generator
 
 
+def load_pe_gan_classifier(device):
+    """Loads the GAN-hardened PE MFGraph (model_gan.pth) from the latest GAN run, or None."""
+    gan_dir = project_root / CONFIG["experiments_path"] / "pe_gan_training"
+    checkpoints = list(gan_dir.rglob("model_gan.pth")) if gan_dir.exists() else []
+    if not checkpoints:
+        print(f"[PE Adversarial] WARNING: no model_gan.pth in {gan_dir}. Skipping GAN-hardened model.")
+        return None
+    path = max(checkpoints, key=lambda f: f.stat().st_mtime)
+    gnn_config = CONFIG["gnn"]
+    model = MFGraph(input_dim=512, hidden_dim=gnn_config["hidden_dim"], k=gnn_config["k"],
+                    dropout_rate=gnn_config["dropout_rate"]).to(device)
+    model.load_state_dict(torch.load(path, map_location=device))
+    model.eval()
+    print(f"[PE Adversarial] Loaded GAN-hardened classifier from: {path.parent.name}/{path.name}")
+    return model
+
+
 def extract_flat_features(loader):
-    """Averages node features to form a 512-dim tabular vector per PE."""
+    """Concatenates the 9 node vectors (as in baselines/train_baseline_pe.py) per PE."""
     X, y = [], []
     for data in loader:
-        X.append(data.x.mean(dim=0).cpu().numpy())
+        X.append(data.x.flatten().cpu().numpy())
         label = data.y.item() if hasattr(data.y, "item") else int(data.y)
         y.append(label)
     return np.array(X, dtype=np.float32), np.array(y, dtype=np.int32)
@@ -218,7 +235,10 @@ def evaluate_pe_adversarial():
     print(f"[Info] Sample split -> Malware: {np.sum(malware_mask)} | Benign: {len(y_true) - np.sum(malware_mask)}")
     
     # 2. Load Models
-    gnn_model = load_pe_gnn(device)
+    graph_models = {"GNN (MFGraph)": load_pe_gnn(device)}
+    gan_clf = load_pe_gan_classifier(device)
+    if gan_clf is not None:
+        graph_models["GNN + GAN (MFGraph)"] = gan_clf
     gan_gen = load_pe_gan(device)
     
     baseline_dir = project_root / "experiments" / "pe_baselines_training"
@@ -281,25 +301,24 @@ def evaluate_pe_adversarial():
                 **metrics
             })
 
-        # Evaluate GNN (MFGraph) on the same perturbed graphs
-        gnn_probs = []
-        with torch.no_grad():
-            for batch in DataLoader(adv_graphs, batch_size=64, shuffle=False):
-                batch = batch.to(device)
-                out = gnn_model(batch.x, batch.edge_index, batch.batch)
-                gnn_probs.append(torch.sigmoid(out.view(-1)).cpu().numpy())
+        # Evaluate the graph models (plain and GAN-hardened MFGraph) on the same perturbed graphs
+        for model_name, graph_model in graph_models.items():
+            gnn_probs = []
+            with torch.no_grad():
+                for batch in DataLoader(adv_graphs, batch_size=64, shuffle=False):
+                    batch = batch.to(device)
+                    out = graph_model(batch.x, batch.edge_index, batch.batch)
+                    gnn_probs.append(torch.sigmoid(out.view(-1)).cpu().numpy())
 
-        gnn_probs = np.concatenate(gnn_probs)
-        gnn_preds = (gnn_probs >= 0.5).astype(int)
-        gnn_metrics = compute_all_metrics(y_true, gnn_preds, gnn_probs)
-        
-        records.append({
-            "Intensity": f"{scale}x",
-            "Scale": scale,
-            "Mode": attack_mode,
-            "Model": "GNN (MFGraph)",
-            **gnn_metrics
-        })
+            gnn_probs = np.concatenate(gnn_probs)
+            gnn_preds = (gnn_probs >= 0.5).astype(int)
+            records.append({
+                "Intensity": f"{scale}x",
+                "Scale": scale,
+                "Mode": attack_mode,
+                "Model": model_name,
+                **compute_all_metrics(y_true, gnn_preds, gnn_probs)
+            })
 
     # 4. Save and Summarize
     df_all = pd.DataFrame(records)
