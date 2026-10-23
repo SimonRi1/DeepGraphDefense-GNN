@@ -55,11 +55,8 @@ class FeatureGraphBuilder:
         feature_order = CONFIG["feature_names"]
         node_features = []
         for name in feature_order:
-            vec = features[name]
-            # Tensor 1D conversion and type casting
-            if isinstance(vec, (list, np.ndarray)):
-                vec = torch.tensor(vec, dtype=torch.float32)
-            node_features.append(torch.tensor(vec, dtype=torch.float32))
+            # 1D float tensor, whatever the input type (list, ndarray or tensor)
+            node_features.append(torch.as_tensor(features[name], dtype=torch.float32).flatten())
 
         # Every node must have the same length to be stacked into x: zero-pad (or truncate)
         # to the fixed max_feature_len, which becomes the PE GNN input_dim.
