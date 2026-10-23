@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-import os
 from torch.utils.data import Subset
 from torch_geometric.loader import DataLoader
 from pathlib import Path
@@ -21,8 +20,8 @@ def get_nids_splits(data_dir: Path, batch_size: int = 128, seed: int = 42):
     """
     dataset = PEGraphDataset(str(data_dir))
     
-    # Sort files to guarantee chronological order (window_0000, window_0001...)
-    files = sorted([f for f in os.listdir(data_dir) if f.endswith('.pt')])
+    # Same sorted order as PEGraphDataset.file_paths, so position == dataset index
+    files = [p.name for p in dataset.file_paths]
     
     # Group windows by capture file (e.g. 'Friday-WorkingHours-Afternoon-DDos.pcap_ISCX')
     scenario_groups = defaultdict(list)

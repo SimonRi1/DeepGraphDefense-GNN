@@ -254,8 +254,8 @@ def evaluate_nids_concept_drift(device):
                 y = batch.y.cpu().numpy() if hasattr(batch, 'y') else [0] * pooled.size(0)
                 labels.extend(y if len(y) == pooled.size(0) else [y[0]] * pooled.size(0))
 
-        X_raw = np.vstack(all_pooled)
-        X_scaled = np.log1p(np.clip(X_raw, a_min=0.0, a_max=None))
+        # Pooled features are already log1p-scaled (same input as baseline training)
+        X_scaled = np.vstack(all_pooled)
         y_true = np.array(labels, dtype=int)
 
         chunk_label = f"Chunk_{chunk_idx + 1:02d}"
@@ -313,7 +313,8 @@ def _nids_heldout_chunks(data_dir, num_chunks):
     windows (last 10% of each scenario, same boundaries as get_nids_splits).
     Chunk k gathers the k-th chronological slice of every scenario's test part.
     """
-    files = sorted([f for f in os.listdir(data_dir) if f.endswith('.pt')])
+    # Sorted like PEGraphDataset.file_paths, so position == dataset index
+    files = sorted(p.name for p in Path(data_dir).rglob('*.pt'))
 
     scenario_groups = {}
     for idx, f in enumerate(files):

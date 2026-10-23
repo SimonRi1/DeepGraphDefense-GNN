@@ -13,16 +13,16 @@ class PEGraphDataset(GeometricDataset):
     Lazy loader for pre-built PyTorch Geometric graphs (.pt files), used by every
     GNN/GAN script for both domains. Searches subfolders recursively (test/02, test/03, ...).
 
-    Note: index i maps to self.file_paths[i] in filesystem (rglob) order, which is
-    NOT alphabetical. Code that computes indices from a sorted file list
-    (get_nids_splits, _nids_heldout_chunks) assumes the two orders match.
+    Files are indexed in sorted path order: for NIDS this is <capture>_window_<NNNN>,
+    i.e. chronological within each capture.
     """
     def __init__(self, root_dir):
         super().__init__()
         print(f"[Dataset] Indexing files in {root_dir}...")
         
-        # Use rglob to recursively find all .pt files, including those in subfolders
-        self.file_paths = list(Path(root_dir).rglob('*.pt'))
+        # Recursive search; sorted so that index i is the same on every machine and matches
+        # the sorted file lists used by get_nids_splits (chronological window order)
+        self.file_paths = sorted(Path(root_dir).rglob('*.pt'))
         
         if not self.file_paths:
             raise FileNotFoundError(f"No .pt files found in {root_dir}")
