@@ -134,7 +134,7 @@ def evaluate_nids_adversarial():
 
     _, _, test_loader = get_nids_splits(nids_dir, batch_size=256, seed=42)
     print(f"[Info] NIDS test graphs (future split): {len(test_loader.dataset)}")
-    X_raw_test, y_true = graphs_to_tabular(test_loader)
+    _, y_true = graphs_to_tabular(test_loader)
     
     # 2. Load Models
     gnn_model = load_nids_gnn(device)
@@ -155,9 +155,9 @@ def evaluate_nids_adversarial():
 
     # 3. Attack configuration: each attack multiplies one flow feature by `scale`
     #    (feat_idx follows feature_cols in src/graph/cic_graph.py).
-    #    Graph features are already log1p-scaled, so the GNN receives scale * log1p(f),
-    #    while baselines receive log1p(scale * pooled features): the two perturbations
-    #    are not identical, keep this in mind when comparing GNN vs baselines.
+    #    The scaling is applied to the raw value of every flow (graph features are log1p(f),
+    #    so f' = scale * f becomes log1p(scale * expm1(x))). The GNN gets the perturbed graphs
+    #    and the baselines get the mean pooling of the same perturbed graphs.
     Psize_scales = [1.0, 0.8, 0.5, 0.1, 2.0, 5.0]
     IAtime_scales = [1.0, 2.0, 5.0, 10.0]
     attacks = {
@@ -176,11 +176,18 @@ def evaluate_nids_adversarial():
         records = []
         
         for scale in sorted(scales):
-            # Apply attack perturbation to raw test features for tabular baselines
-            X_adv_raw = X_raw_test.copy()
-            X_adv_raw[:, feat_idx] = X_adv_raw[:, feat_idx] * scale
-            X_adv_scaled = np.log1p(np.clip(X_adv_raw, a_min=0.0, a_max=None))
-            
+            # Perturb every test window once; GNN and baselines see the same perturbed flows
+            gnn_probs, pooled = [], []
+            with torch.no_grad():
+                for batch in test_loader:
+                    x_adv = batch.x.clone()
+                    x_adv[:, feat_idx] = torch.log1p(torch.expm1(x_adv[:, feat_idx]) * scale)
+
+                    out = gnn_model(x_adv.to(device), batch.edge_index.to(device), batch.batch.to(device))
+                    gnn_probs.extend(torch.sigmoid(out.view(-1)).cpu().numpy())
+                    pooled.append(global_mean_pool(x_adv, batch.batch).numpy())
+            X_adv_scaled = np.vstack(pooled)
+
             # --- EVALUATE TABULAR BASELINES ---
             for name, model in baselines.items():
                 y_pred = model.predict(X_adv_scaled)
@@ -199,16 +206,6 @@ def evaluate_nids_adversarial():
                 })
 
             # --- EVALUATE GNN (MFGraph) ---
-            gnn_probs = []
-            with torch.no_grad():
-                for batch in test_loader:
-                    batch_x_adv = batch.x.clone()
-                    batch_x_adv[:, feat_idx] = batch_x_adv[:, feat_idx] * scale
-                    
-                    out = gnn_model(batch_x_adv.to(device), batch.edge_index.to(device), batch.batch.to(device))
-                    probs = torch.sigmoid(out.view(-1)).cpu().numpy()
-                    gnn_probs.extend(probs)
-                    
             gnn_probs = np.array(gnn_probs)
             gnn_preds = (gnn_probs >= 0.5).astype(int)
             gnn_metrics = compute_all_metrics(y_true, gnn_preds, gnn_probs)
