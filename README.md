@@ -156,7 +156,7 @@ In `multi_stage` sessions, the order follows the kill chain: malicious traffic (
 $$
 r(p) =
 \begin{cases}
-0.5 \cdot \dfrac{p}{t} & p < t \\[2mm]
+0.5 \cdot \dfrac{p}{t} & p < t \\
 0.5 + 0.5 \cdot \dfrac{p - t}{1 - t} & p \ge t
 \end{cases}
 $$
@@ -166,7 +166,7 @@ $$
 $$
 S =
 \begin{cases}
-1 - (1 - R_{nids})(1 - R_{pe}) & \text{if } R_{nids} \ge \tau \text{ and } R_{pe} \ge \tau \quad \text{(corroborated: Noisy-OR boost)} \\[1mm]
+1 - (1 - R_{nids})(1 - R_{pe}) & \text{if } R_{nids} \ge \tau \text{ and } R_{pe} \ge \tau \quad \text{(corroborated: Noisy-OR boost)} \\
 \max(R_{nids},\, R_{pe}) & \text{otherwise}
 \end{cases}
 $$
