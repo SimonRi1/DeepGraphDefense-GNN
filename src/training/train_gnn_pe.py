@@ -41,10 +41,11 @@ def train_gnn():
     print("\n[Data] Loading January 2018 dataset (Training set)...")
     full_jan_dataset = PEGraphDataset(graphs_dir / "train")
     
-    # 1. 80/20 split of January only (unseeded: the split changes between runs)
+    # 1. Seeded 80/20 split of January only (same split as the PE GAN pipeline)
     train_size = int(0.8 * len(full_jan_dataset))
     val_size = len(full_jan_dataset) - train_size
-    train_data, val_data = random_split(full_jan_dataset, [train_size, val_size])
+    generator = torch.Generator().manual_seed(CONFIG["random_seed"])
+    train_data, val_data = random_split(full_jan_dataset, [train_size, val_size], generator=generator)
 
     max_cores = os.cpu_count() or 6
     optimal_workers = min(8, max_cores - 1)

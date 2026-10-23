@@ -89,13 +89,15 @@ def train_nids_gnn():
             
         model.eval()
         all_preds, all_labels = [], []
+        val_loss = 0.0
         
         with torch.no_grad():
             for batch in val_loader:
                 batch = batch.to(device)
 
                 logits = model(batch.x, batch.edge_index, batch.batch).squeeze(-1)
-                
+                val_loss += criterion(logits, batch.y.float()).item()
+
                 probs = torch.sigmoid(logits).cpu().numpy()
                 all_preds.extend(probs)
                 all_labels.extend(batch.y.cpu().numpy())
@@ -105,12 +107,14 @@ def train_nids_gnn():
         val_auc = roc_auc_score(all_labels, all_preds)
         
         epoch_train_loss = train_loss / len(train_loader)
-        print(f"Epoch {epoch:02d} | Train Loss: {epoch_train_loss:.4f} | Val F1: {val_f1:.4f} | Val AUC: {val_auc:.4f}")
+        epoch_val_loss = val_loss / len(val_loader)
+        print(f"Epoch {epoch:02d} | Train Loss: {epoch_train_loss:.4f} | Val Loss: {epoch_val_loss:.4f} | Val F1: {val_f1:.4f} | Val AUC: {val_auc:.4f}")
         
         # Append epoch data to history
         metrics_history.append({
             "Epoch": epoch,
             "Train_Loss": epoch_train_loss,
+            "Val_Loss": epoch_val_loss,
             "Val_F1": val_f1,
             "Val_AUC": val_auc
         })
