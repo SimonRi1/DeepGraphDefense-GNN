@@ -63,7 +63,7 @@ def train_nids_gnn():
     logger = ExperimentLogger(experiment_name="nids_gnn_training", config=CONFIG)
     
     # Tracking AUC to lock in peak performance
-    best_auc = 0.0
+    best_auc, best_f1 = -1.0, -1.0
     best_weights = copy.deepcopy(model.state_dict())
     
     # List to store metrics for the CSV
@@ -122,8 +122,9 @@ def train_nids_gnn():
         scheduler.step(val_auc)
         
         # Save best weights
-        if val_auc > best_auc:
-            best_auc = val_auc
+        # Model selection on validation AUC, F1 breaks ties (AUC often saturates on NIDS)
+        if (val_auc, val_f1) > (best_auc, best_f1):
+            best_auc, best_f1 = val_auc, val_f1
             best_weights = copy.deepcopy(model.state_dict())
             print(f"  --> [*] New best model saved! (AUC: {best_auc:.4f})")
 

@@ -232,7 +232,7 @@ def train_classifier(train_dataset, num_benign, num_malicious, val_loader, input
     print(f"[MFGraph] Augmented set — Benign: {num_benign}, Malicious: {num_malicious} "
           f"| pos_weight: {pos_weight.item():.4f}")
 
-    best_auc, best_weights = -1.0, copy.deepcopy(model.state_dict())
+    best_auc, best_f1, best_weights = -1.0, -1.0, copy.deepcopy(model.state_dict())
     epochs = gnn_config["num_epochs"]
 
     for epoch in range(1, epochs + 1):
@@ -259,8 +259,9 @@ def train_classifier(train_dataset, num_benign, num_malicious, val_loader, input
         print(f"Epoch {epoch:02d}/{epochs} - Train Loss: {metrics['train_loss']:.4f} | "
               f"Val Loss: {metrics['test_loss']:.4f} | AUC: {metrics['auc']:.4f} | F1: {metrics['f1']:.4f}")
 
-        if metrics["auc"] > best_auc:
-            best_auc = metrics["auc"]
+        # Model selection on validation AUC, F1 breaks ties
+        if (metrics["auc"], metrics["f1"]) > (best_auc, best_f1):
+            best_auc, best_f1 = metrics["auc"], metrics["f1"]
             best_weights = copy.deepcopy(model.state_dict())
             print(f"  -> New best validation AUC: {best_auc:.4f}")
 
