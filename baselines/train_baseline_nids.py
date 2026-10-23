@@ -43,9 +43,9 @@ def train_and_save_baselines():
     print(f"\n[NIDS Baselines] Processing {len(train_loader.dataset)} training graphs for NIDS baselines...")
     X_train_raw, y_train = graphs_to_tabular(train_loader)
 
-    # Node features are already log1p-scaled by cic_graph.py, so this is a second log1p.
-    # The evaluation scripts apply the same transform, so train and test stay consistent.
-    X_train_scaled = np.log1p(np.clip(X_train_raw, a_min=0.0, a_max=None))
+    # Node features are already log1p-scaled by cic_graph.py: use the pooled values as they are,
+    # exactly like the GNN (the evaluation scripts do the same)
+    X_train = X_train_raw
 
     models = {
         "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
@@ -61,7 +61,7 @@ def train_and_save_baselines():
     print("\n[NIDS Baselines] Training and saving models...")
     for name, model in models.items():
         print(f" -> Training {name}...")
-        model.fit(X_train_scaled, y_train)
+        model.fit(X_train, y_train)
         
         # Saved as joblib for the drift / adversarial evaluation scripts (name must match there)
         model_filename = baseline_dir / f"{name.replace(' ', '_').replace('(', '').replace(')', '')}.joblib"
