@@ -33,6 +33,7 @@ Both detectors are trained with Generative Adversarial Networks (GANs) to make t
   - [Part 1: Host-Based Malware Detection (PE)](#part-1-host-based-malware-detection-pe)
   - [Part 2: Network Intrusion Detection (NIDS)](#part-2-network-intrusion-detection-nids)
   - [Part 3: Evaluation and Unified Pipeline](#part-3-evaluation-and-unified-pipeline)
+  - [Notebooks](#notebooks)
 - [Configuration](#configuration)
 - [Evaluation Methodology](#evaluation-methodology)
 - [Performance](#performance)
@@ -361,6 +362,43 @@ python orchestrator.py -t unified_pipeline
 ```
 
 All outputs (checkpoints, logs, metrics and figures) are written to `experiments/` in timestamped subfolders.
+
+### Notebooks
+
+The notebooks in `notebooks/` do **not** train anything: they read the datasets, the generated graphs and the results
+already saved in `experiments/` by the orchestrator tasks above, and turn them into tables, plots and comments.
+Run the corresponding orchestrator tasks first, then open the notebooks in numerical order.
+
+| Notebook | Goal |
+|---|---|
+| `00_project_overview.ipynb` | Thesis goal, the two detection layers (network / host), the models and the research questions |
+| `01_data_exploration_CIC.ipynb` | Explore CIC-IDS-2017: attack classes per day, the 16 flow features kept, windowing and labelling |
+| `01_data_exploration_EMBER.ipynb` | Explore EMBER 2018: feature families, class balance and the chronological (monthly) split |
+| `02_graph_construction.ipynb` | Visualize and compare PE graphs (feature families as nodes) and NIDS graphs (flows as nodes) |
+| `03_training_analysis.ipynb` | Check that every model (GNNs, GAN, GAN-augmented classifiers) trained correctly from the logged curves |
+| `04_clean_performance_and_drift.ipynb` | RQ1/RQ2: clean performance vs. baselines and performance over time (concept drift) |
+| `05_adversarial_robustness.ipynb` | RQ3: degradation under packet-size, inter-arrival-time and GAN-evasion attacks |
+| `06_unified_pipeline.ipynb` | RQ4: NIDS + PE defense-in-depth simulation and Impact Mitigation |
+
+**Running outside VS Code.** Register the conda environment as a Jupyter kernel once:
+
+```bash
+conda activate thesis-gnn
+python -m ipykernel install --user --name thesis-gnn --display-name "Python (thesis)"
+```
+
+Then either open them interactively (select the *Python (thesis)* kernel):
+
+```bash
+jupyter notebook notebooks/
+```
+
+or execute them headless, saving the outputs in place:
+
+```bash
+jupyter nbconvert --to notebook --execute --inplace \
+    --ExecutePreprocessor.kernel_name=thesis-gnn notebooks/*.ipynb
+```
 
 ---
 
