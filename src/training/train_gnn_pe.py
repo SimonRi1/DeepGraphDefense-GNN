@@ -29,7 +29,7 @@ warnings.filterwarnings("ignore")
 def train_gnn():
     """
     Trains the PE MFGraph on January 2018 EMBER graphs (80/20 random split).
-    The checkpoint with the best validation F1 is saved as best_gnn_model.pth;
+    The checkpoint with the best validation AUC (F1 as tie-break) is saved as best_gnn_model.pth;
     the later months (test/02..12) are left untouched for the concept-drift evaluation.
     """
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -71,7 +71,7 @@ def train_gnn():
     criterion = nn.BCEWithLogitsLoss()
 
     epochs = gnn_config["num_epochs"]
-    best_val_f1 = 0.0
+    best_val_auc, best_val_f1 = -1.0, -1.0
     best_model_weights = None
 
     for epoch in range(epochs):
@@ -120,11 +120,11 @@ def train_gnn():
         val_prec = precision_score(all_labels, binary_preds, zero_division=0)
         val_rec = recall_score(all_labels, binary_preds, zero_division=0)
         
-        # Model selection on validation F1 (the NIDS and GAN scripts use AUC instead)
-        if val_f1 > best_val_f1:
-            best_val_f1 = val_f1
+        # Model selection on validation AUC (as the NIDS and GAN scripts), F1 breaks ties
+        if (val_auc, val_f1) > (best_val_auc, best_val_f1):
+            best_val_auc, best_val_f1 = val_auc, val_f1
             best_model_weights = copy.deepcopy(model.state_dict())
-            print(f"  -> New best validation F1 score: {best_val_f1:.4f}")
+            print(f"  -> New best validation AUC: {best_val_auc:.4f} (F1 {best_val_f1:.4f})")
         
         # "test_loss" is the validation loss (column name kept for the notebooks / logger)
         metrics = {
