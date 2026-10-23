@@ -8,6 +8,8 @@ from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.svm import SVC
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import global_mean_pool
 import joblib
@@ -47,12 +49,14 @@ def train_and_save_baselines():
     # exactly like the GNN (the evaluation scripts do the same)
     X_train = X_train_raw
 
+    # Malicious windows are a small minority: balanced class weights stop the models from
+    # collapsing to one class; scaling is needed by SVM/MLP (a no-op for the trees)
     models = {
-        "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
-        "Decision Tree (ID3)": DecisionTreeClassifier(random_state=42),
+        "Random Forest": RandomForestClassifier(n_estimators=100, class_weight="balanced", random_state=42),
+        "Decision Tree (ID3)": DecisionTreeClassifier(criterion="entropy", class_weight="balanced", random_state=42),
         "AdaBoost": AdaBoostClassifier(random_state=42),
-        "MLP": MLPClassifier(hidden_layer_sizes=(64, 32), max_iter=50, random_state=42),
-        "SVM": SVC(probability=True, random_state=42)
+        "MLP": make_pipeline(StandardScaler(), MLPClassifier(hidden_layer_sizes=(64, 32), max_iter=300, random_state=42)),
+        "SVM": make_pipeline(StandardScaler(), SVC(probability=True, class_weight="balanced", random_state=42))
     }
 
     baseline_dir = project_root / "experiments" / "nids_baselines_training"
